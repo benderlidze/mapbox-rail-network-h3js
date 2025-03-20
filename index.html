@@ -32,8 +32,9 @@
         const map = new mapboxgl.Map({
             container: 'map',
             style: 'mapbox://styles/mapbox/light-v11',
-            zoom: 6,
-            center: [-122.447303, 37.753574]
+            zoom: 3,
+            center: { lng: -102.44106443015511, lat: 39.671600770516164 },
+            projection: 'mercator'
         });
 
         map.on('load', () => {
@@ -43,7 +44,7 @@
                     console.log(data);
 
                     // Define the H3 resolution (0-15, where 15 is the finest resolution)
-                    const h3Resolution = 4;
+                    const h3Resolution = new URLSearchParams(window.location.search).get('res') ?? 3
 
                     // Create a Set to store unique hexagons
                     const hexagons = new Set();
@@ -91,14 +92,14 @@
 
             map.addSource('rail', {
                 type: 'vector',
-                url: 'mapbox://serhuz.92gl8t73'
+                url: 'mapbox://serhuz.7ba5rjts'
             });
             map.addLayer(
                 {
                     'id': 'rail-data',
                     'type': 'line',
                     'source': 'rail',
-                    'source-layer': 'North_American_Rail_Network_L-cssivv',
+                    'source-layer': 'North_American_Rail_Network_Lines',
                     'layout': {
                         'line-join': 'round',
                         'line-cap': 'round'
@@ -128,7 +129,7 @@
                 source: 'hexagons',
                 paint: {
                     'fill-color': '#4285F4',
-                    'fill-opacity': 0.5
+                    'fill-opacity': 0.3
                 }
             });
 
@@ -138,8 +139,9 @@
                 type: 'line',
                 source: 'hexagons',
                 paint: {
-                    'line-color': '#000',
-                    'line-width': 1
+                    'line-color': '#4285F4',
+                    'line-width': 0.5,
+                    'line-opacity': 0.1
                 }
             });
         });
