@@ -1,0 +1,1 @@
+ tippecanoe -zg -o ne_10m_admin_1_states_provinces.mbtiles --coalesce-densest-as-needed --extend-zooms-if-still-dropping North_American_Rail_Network_Lines.json

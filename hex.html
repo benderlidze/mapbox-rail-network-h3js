@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <title>Add a vector tile source</title>
+    <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
+    <link href="https://api.mapbox.com/mapbox-gl-js/v3.10.0/mapbox-gl.css" rel="stylesheet">
+    <script src="https://api.mapbox.com/mapbox-gl-js/v3.10.0/mapbox-gl.js"></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://unpkg.com/h3-js"></script>
+
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+        }
+
+        #map {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 100%;
+        }
+
+        #overlay {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 1;
+        }
+
+        #selected-hexagons {
+            background: rgba(255, 255, 255, 0.9);
+            padding: 10px;
+            border-radius: 4px;
+            max-height: 300px;
+            overflow-y: auto;
+            width: 250px;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+        }
+
+        #selected-list {
+            font-family: monospace;
+            font-size: 12px;
+            margin-top: 8px;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="map"></div>
+    <div id="overlay">
+        <div id="selected-hexagons">
+            <h3>Selected Hexagons</h3>
+            <div id="selected-list">No hexagons selected</div>
+        </div>
+    </div>
+    <script>
+
+        const boundsHex = {
+            "type": "FeatureCollection",
+            "features": [
+                {
+                    "type": "Feature",
+                    "properties": {},
+                    "geometry": {
+                        "coordinates": [
+                            [
+                                [
+                                    -170.67056978175552,
+                                    71.26318400273098
+                                ],
+                                [
+                                    -170.67056978175552,
+                                    16.049407046353963
+                                ],
+                                [
+                                    -50.505516544069195,
+                                    16.049407046353963
+                                ],
+                                [
+                                    -50.505516544069195,
+                                    71.26318400273098
+                                ],
+                                [
+                                    -170.67056978175552,
+                                    71.26318400273098
+                                ]
+                            ]
+                        ],
+                        "type": "Polygon"
+                    }
+                }
+            ]
+        }
+
+        // Store selected hexagons
+        const selectedHexagons = new Set();
+
+        // Function to update the display of selected hexagons
+        function updateSelectedHexagonsDisplay() {
+            const listElement = document.getElementById('selected-list');
+            listElement.innerHTML = '';
+
+            if (selectedHexagons.size === 0) {
+                listElement.innerHTML = 'No hexagons selected';
+                return;
+            }
+
+            selectedHexagons.forEach(h3Index => {
+                const item = document.createElement('div');
+                item.textContent = h3Index;
+                listElement.appendChild(item);
+            });
+
+            console.log('Selected hexagons:', Array.from(selectedHexagons));
+        }
+
+        // Function to convert polygon to H3 hexagons
+        function polygonToH3(polygon, resolution) {
+            const coordinates = polygon.geometry.coordinates[0];
+            // Convert to the format expected by h3.polygonToCells
+            const h3Polygon = coordinates.map(coord => [coord[1], coord[0]]);
+            // Get all hexagons within the polygon
+            return h3.polygonToCells(h3Polygon, resolution);
+        }
+
+        mapboxgl.accessToken = 'pk.eyJ1Ijoic2VyaHV6IiwiYSI6ImNseXpvc3RlczJpbnIya3FscDU2aHc5d3EifQ.FHtPjde_lqensSHZxqthgw';
+        const map = new mapboxgl.Map({
+            container: 'map',
+            style: 'mapbox://styles/mapbox/light-v11',
+            zoom: 3,
+            center: { lng: -102.44106443015511, lat: 39.671600770516164 },
+            projection: 'mercator'
+        });
+
+        map.on('load', () => {
+            // Define the H3 resolution from URL parameter
+            const h3Resolution = new URLSearchParams(window.location.search).get('res') ?? 3;
+
+            // Fill boundsHex with hexagons
+            const boundaryHexagons = polygonToH3(boundsHex.features[0], parseInt(h3Resolution));
+            console.log('Boundary hexagons:', boundaryHexagons);
+
+            // Convert to GeoJSON features
+            const boundaryFeatures = boundaryHexagons.map(h3Index => {
+                const boundary = h3.cellToBoundary(h3Index, true);
+                return {
+                    type: 'Feature',
+                    properties: {
+                        h3Index: h3Index,
+                        selected: false
+                    },
+                    geometry: {
+                        type: 'Polygon',
+                        coordinates: [boundary]
+                    }
+                };
+            });
+
+            // Add hexagons source with boundary hexagons
+            map.addSource('hexagons', {
+                type: 'geojson',
+                data: {
+                    type: 'FeatureCollection',
+                    features: boundaryFeatures
+                }
+            });
+
+            // Add layers for hexagons
+            map.addLayer({
+                id: 'hexagons-fill',
+                type: 'fill',
+                source: 'hexagons',
+                paint: {
+                    'fill-color': [
+                        'case',
+                        ['boolean', ['get', 'selected'], false],
+                        '#FF0000',  // Selected = red
+                        '#4285F4'   // Not selected = blue
+                    ],
+                    'fill-opacity': 0.3
+                }
+            });
+
+            map.addLayer({
+                id: 'hexagons-line',
+                type: 'line',
+                source: 'hexagons',
+                paint: {
+                    'line-color': 'black',
+                    'line-width': 1,
+                    'line-opacity': 1
+                }
+            });
+
+            // Add click handler for hexagons
+            map.on('click', 'hexagons-fill', (e) => {
+                if (e.features.length > 0) {
+                    const h3Index = e.features[0].properties.h3Index;
+                    const isSelected = !e.features[0].properties.selected;
+
+                    // Update the data
+                    const features = map.getSource('hexagons')._data.features.map(f => {
+                        if (f.properties.h3Index === h3Index) {
+                            return {
+                                ...f,
+                                properties: {
+                                    ...f.properties,
+                                    selected: isSelected
+                                }
+                            };
+                        }
+                        return f;
+                    });
+
+                    // Update the source
+                    map.getSource('hexagons').setData({
+                        type: 'FeatureCollection',
+                        features
+                    });
+
+                    // Update the selected hexagons set
+                    if (isSelected) {
+                        selectedHexagons.add(h3Index);
+                    } else {
+                        selectedHexagons.delete(h3Index);
+                    }
+
+                    // Update the display
+                    updateSelectedHexagonsDisplay();
+                }
+            });
+
+            // Change cursor to pointer when hovering over hexagons
+            map.on('mouseenter', 'hexagons-fill', () => {
+                map.getCanvas().style.cursor = 'pointer';
+            });
+
+            map.on('mouseleave', 'hexagons-fill', () => {
+                map.getCanvas().style.cursor = '';
+            });
+
+
+            map.addSource('rail', {
+                type: 'vector',
+                url: 'mapbox://serhuz.7ba5rjts'
+            });
+
+            map.addLayer(
+                {
+                    'id': 'rail-data',
+                    'type': 'line',
+                    'source': 'rail',
+                    'source-layer': 'North_American_Rail_Network_Lines',
+                    'layout': {
+                        'line-join': 'round',
+                        'line-cap': 'round'
+                    },
+                    'paint': {
+                        'line-color': '#ff69b4',
+                        'line-width': 1
+                    }
+                },
+                'road-label-simple' // Add layer below labels
+            );
+        });
+    </script>
+
+</body>
+
+</html>
