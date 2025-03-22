@@ -52,16 +52,20 @@
                     // Process each data point
                     const features = data.map(code => {
 
+                        console.log('code.color', code.color);
+
                         // Get the boundary of the hexagon as a GeoJSON polygon
                         const boundary = h3.cellToBoundary(code.hex, true); // true to return GeoJSON coordinates
                         return {
                             type: 'Feature',
                             properties: {
                                 //h3Index: h3Index
+                                color: code.color !== "" ? code.color : '#4285F4'
                             },
                             geometry: {
                                 type: 'Polygon',
-                                coordinates: [boundary]
+                                coordinates: [boundary],
+
                             }
                         };
                     });
@@ -113,7 +117,7 @@
                 type: 'fill',
                 source: 'hexagons',
                 paint: {
-                    'fill-color': '#4285F4',
+                    'fill-color': ['get', 'color'],
                     'fill-opacity': 0.3
                 }
             });
