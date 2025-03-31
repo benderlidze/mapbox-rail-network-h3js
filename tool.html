@@ -59,6 +59,9 @@
     <script>
         // Store selected hexagons
         const selectedHexagons = new Map();
+        const appData = {
+            all: []
+        }
 
         const boundsHex = {
             "type": "FeatureCollection",
@@ -109,13 +112,26 @@
                 return;
             }
 
-            selectedHexagons.forEach(h3Index => {
+            selectedHexagons.forEach(hex => {
+
                 const item = document.createElement('div');
-                item.textContent = h3Index;
+                item.id = hex.h3Index;
+                item.textContent = hex.h3Index + ' - ' + hex.color;
+                item.style.color = hex.color;
+
+                item.addEventListener('click', () => {
+                    const [lat, lng] = h3.cellToLatLng(hex.h3Index);
+                    map.flyTo({
+                        center: [lng, lat],
+                        zoom: 8
+                    });
+                });
+                item.style.cursor = 'pointer';
+                item.style.textDecoration = 'underline';
+
                 listElement.appendChild(item);
             });
 
-            console.log('Selected hexagons:', Array.from(selectedHexagons));
         }
 
         // Function to convert polygon to H3 hexagons
@@ -154,11 +170,19 @@
                 let border = 1;
                 let opcaity = 0.1;
                 let color = '#4285F4';
+                let selected = false;
+
                 csvData.find(code => {
                     if (code.hex === h3Index) {
                         border = 2;
                         opcaity = 0.5;
                         color = code.color !== "" ? code.color : '#4285F4';
+                        selected = true;
+
+                        selectedHexagons.set(h3Index, {
+                            h3Index,
+                            color
+                        });
                     }
                 });
 
@@ -166,7 +190,7 @@
                     type: 'Feature',
                     properties: {
                         h3Index: h3Index,
-                        selected: false,
+                        selected: selected,
                         border: border,
                         opacity: opcaity,
                         color: color
@@ -177,6 +201,8 @@
                     }
                 };
             });
+
+            appData.all = boundaryFeatures;
 
             // Add hexagons source with boundary hexagons
             map.addSource('hexagons', {
@@ -193,12 +219,7 @@
                 type: 'fill',
                 source: 'hexagons',
                 paint: {
-                    'fill-color': [
-                        'case',
-                        ['boolean', ['get', 'selected'], false],
-                        '#FF0000',  // Selected = red
-                        '#4285F4'   // Not selected = blue
-                    ],
+                    'fill-color': ['get', 'color'],
                     'fill-opacity': ['get', 'opacity']
                 }
             });
@@ -218,40 +239,82 @@
             map.on('click', 'hexagons-fill', (e) => {
                 if (e.features.length > 0) {
                     const h3Index = e.features[0].properties.h3Index;
-                    const isSelected = !e.features[0].properties.selected;
 
-                    // Update the data
-                    const features = map.getSource('hexagons')._data.features.map(f => {
-                        if (f.properties.h3Index === h3Index) {
-                            return {
-                                ...f,
-                                properties: {
-                                    ...f.properties,
-                                    selected: isSelected
-                                }
-                            };
+                    console.log('h3Index', h3Index);
+
+                    appData.all.map(hex => {
+                        if (hex.properties.h3Index === h3Index) {
+                            console.log('', hex.properties);
+                            hex.properties.selected = !hex.properties.selected;
                         }
-                        return f;
+                        return hex
                     });
 
-                    // Update the source
                     map.getSource('hexagons').setData({
                         type: 'FeatureCollection',
-                        features
+                        features: appData.all
                     });
 
-                    // Update the selected hexagons set
-                    if (isSelected) {
-                        selectedHexagons.set(h3Index, {
-                            h3Index,
-                            color: e.features[0].properties.color
-                        });
-                    } else {
-                        selectedHexagons.delete(h3Index);
-                    }
-
-                    // Update the display
                     updateSelectedHexagonsDisplay();
+
+                    // // Update the data
+                    // const features = map.getSource('hexagons')._data.features.map(f => {
+                    //     if (f.properties.h3Index === h3Index) {
+                    //         return {
+                    //             ...f,
+                    //             properties: {
+                    //                 ...f.properties,
+                    //                 selected: isSelected
+                    //             }
+                    //         };
+                    //     }
+                    //     return f;
+                    // });
+
+                    // // Update the source
+                    // map.getSource('hexagons').setData({
+                    //     type: 'FeatureCollection',
+                    //     features
+                    // });
+
+                    // // Update the display
+                    // updateSelectedHexagonsDisplay();
+
+
+                    // const isSelected = selectedHexagons.has(h3Index) ? false : true;
+
+                    // // Update the selected hexagons set
+                    // if (isSelected) {
+                    //     selectedHexagons.set(h3Index, {
+                    //         h3Index,
+                    //         color: e.features[0].properties.color
+                    //     });
+                    // } else {
+                    //     selectedHexagons.delete(h3Index);
+                    // }
+
+                    // // Update the data
+                    // const features = map.getSource('hexagons')._data.features.map(f => {
+                    //     if (f.properties.h3Index === h3Index) {
+                    //         return {
+                    //             ...f,
+                    //             properties: {
+                    //                 ...f.properties,
+                    //                 selected: isSelected
+                    //             }
+                    //         };
+                    //     }
+                    //     return f;
+                    // });
+
+                    // // Update the source
+                    // map.getSource('hexagons').setData({
+                    //     type: 'FeatureCollection',
+                    //     features
+                    // });
+
+                    // // Update the display
+                    // updateSelectedHexagonsDisplay();
                 }
             });
 
