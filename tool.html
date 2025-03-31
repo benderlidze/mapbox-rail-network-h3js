@@ -45,11 +45,35 @@
             font-size: 12px;
             margin-top: 8px;
         }
+
+        #color {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 1;
+
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+
+            background-color: white;
+            padding: 15px;
+        }
+
+        #color>span {
+            text-decoration: underline;
+            cursor: pointer;
+        }
     </style>
 </head>
 
 <body>
     <div id="map"></div>
+    <div id="color">
+        <input type="color" id="color-picker" value="#4285F4">
+        <span id="downloadcsv">Download csv</span>
+    </div>
     <div id="overlay">
         <div id="selected-hexagons">
             <h3>Selected Hexagons</h3>
@@ -60,9 +84,9 @@
         // Store selected hexagons
         const selectedHexagons = new Map();
         const appData = {
-            all: []
+            all: [],
+            currentColor: '#4285F4'
         }
-
         const boundsHex = {
             "type": "FeatureCollection",
             "features": [
@@ -100,6 +124,24 @@
             ]
         }
 
+        const colorPicker = document.getElementById('color-picker');
+        colorPicker.addEventListener('input', (e) => {
+            appData.currentColor = e.target.value;
+        });
+
+        const downloadCSV = document.getElementById('downloadcsv');
+        downloadcsv.addEventListener('click', () => {
+            const csv = 'hex,color\n' + appData.all
+                .filter(hex => hex.properties.selected)
+                .map(hex => hex.properties.h3Index + ',' + hex.properties.color)
+                .join('\n');
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'hexagons.csv';
+            a.click();
+        });
 
 
         // Function to update the display of selected hexagons
@@ -107,30 +149,31 @@
             const listElement = document.getElementById('selected-list');
             listElement.innerHTML = '';
 
-            if (selectedHexagons.size === 0) {
-                listElement.innerHTML = 'No hexagons selected';
-                return;
-            }
 
-            selectedHexagons.forEach(hex => {
 
-                const item = document.createElement('div');
-                item.id = hex.h3Index;
-                item.textContent = hex.h3Index + ' - ' + hex.color;
-                item.style.color = hex.color;
+            appData.all
+                .filter(hex => hex.properties.selected)
+                .forEach(hex => {
 
-                item.addEventListener('click', () => {
-                    const [lat, lng] = h3.cellToLatLng(hex.h3Index);
-                    map.flyTo({
-                        center: [lng, lat],
-                        zoom: 8
+                    const { h3Index, color } = hex.properties;
+
+                    const item = document.createElement('div');
+                    item.id = h3Index;
+                    item.textContent = h3Index + ' - ' + color;
+                    item.style.color = color;
+
+                    item.addEventListener('click', () => {
+                        const [lat, lng] = h3.cellToLatLng(h3Index);
+                        map.flyTo({
+                            center: [lng, lat],
+                            zoom: 8
+                        });
                     });
-                });
-                item.style.cursor = 'pointer';
-                item.style.textDecoration = 'underline';
+                    item.style.cursor = 'pointer';
+                    item.style.textDecoration = 'underline';
 
-                listElement.appendChild(item);
-            });
+                    listElement.appendChild(item);
+                });
 
         }
 
@@ -220,7 +263,12 @@
                 source: 'hexagons',
                 paint: {
                     'fill-color': ['get', 'color'],
-                    'fill-opacity': ['get', 'opacity']
+                    'fill-opacity': [
+                        'case',
+                        ['boolean', ['get', 'selected'], false],
+                        0.5,
+                        0
+                    ]
                 }
             });
 
@@ -243,10 +291,14 @@
                     console.log('h3Index', h3Index);
 
                     appData.all.map(hex => {
-                        if (hex.properties.h3Index === h3Index) {
-                            console.log('', hex.properties);
-                            hex.properties.selected = !hex.properties.selected;
+                        if (hex.properties.h3Index === h3Index && !hex.properties.selected) {
+                            hex.properties.selected = true;
+                            hex.properties.color = appData.currentColor;
                         }
+                        else if (hex.properties.h3Index === h3Index && hex.properties.selected) {
+                            hex.properties.selected = false;
+                        }
+
                         return hex
                     });
 
