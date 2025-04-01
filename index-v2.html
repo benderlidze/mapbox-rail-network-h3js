@@ -34,12 +34,13 @@
             style: 'mapbox://styles/mapbox/light-v11',
             zoom: 3,
             center: { lng: -102.44106443015511, lat: 39.671600770516164 },
-            projection: 'mercator'
+            projection: 'mercator',
+            maxZoom: 7
         });
 
         map.on('load', () => {
 
-            d3.csv("https://docs.google.com/spreadsheets/d/e/2PACX-1vSfiy5zML207hyPns2tfGPEg1rLqzcymggwGoIdS-2KZqaMBaAK-Y65ue89UGCl5EP-5WkxlyZWI-WV/pub?output=csv")
+            d3.csv("https://docs.google.com/spreadsheets/d/e/2PACX-1vTh0FM3N99ac2PQP3ISg4L62RFJEo3XKPa5qqDHvkPyXh8Z4Z11uh-2MY5SjkWqcnnqLbQHUzMh0L7x/pub?output=csv")
                 .then(function (data) {
                     console.log(data);
 
