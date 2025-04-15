@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <title>Add a vector tile source</title>
+    <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
+    <link href="https://api.mapbox.com/mapbox-gl-js/v3.10.0/mapbox-gl.css" rel="stylesheet">
+    <script src="https://api.mapbox.com/mapbox-gl-js/v3.10.0/mapbox-gl.js"></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="h3-js.js"></script>
+
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+        }
+
+        #map {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 100%;
+        }
+
+        #overlay {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 1;
+        }
+
+        #selected-hexagons {
+            background: rgba(255, 255, 255, 0.9);
+            padding: 10px;
+            border-radius: 4px;
+            max-height: 300px;
+            overflow-y: auto;
+            width: 250px;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+        }
+
+        #selected-list {
+            font-family: monospace;
+            font-size: 12px;
+            margin-top: 8px;
+        }
+
+        #color {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 1;
+
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+
+            background-color: white;
+            padding: 15px;
+        }
+
+        #color>span {
+            text-decoration: underline;
+            cursor: pointer;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="map"></div>
+    <div id="color">
+        <input type="color" id="color-picker" value="#4285F4">
+        <span id="downloadcsv">Download csv</span>
+    </div>
+    <div id="overlay">
+        <div id="selected-hexagons">
+            <h3>Selected Hexagons</h3>
+            <div id="selected-list">No hexagons selected</div>
+        </div>
+    </div>
+    <script>
+        // Store selected hexagons
+        const selectedHexagons = new Map();
+        const appData = {
+            all: [],
+            currentColor: '#4285F4'
+        }
+        const boundsHex = {
+            "type": "FeatureCollection",
+            "features": [
+                {
+                    "type": "Feature",
+                    "properties": {},
+                    "geometry": {
+                        "coordinates": [
+                            [
+                                [
+                                    -170.67056978175552,
+                                    71.26318400273098
+                                ],
+                                [
+                                    -170.67056978175552,
+                                    1.049407046353963
+                                ],
+                                [
+                                    -50.505516544069195,
+                                    1.049407046353963
+                                ],
+                                [
+                                    -50.505516544069195,
+                                    71.26318400273098
+                                ],
+                                [
+                                    -170.67056978175552,
+                                    71.26318400273098
+                                ]
+                            ]
+                        ],
+                        "type": "Polygon"
+                    }
+                }
+            ]
+        }
+
+        const colorPicker = document.getElementById('color-picker');
+        colorPicker.addEventListener('input', (e) => {
+            appData.currentColor = e.target.value;
+        });
+
+        const downloadCSV = document.getElementById('downloadcsv');
+        downloadcsv.addEventListener('click', () => {
+            const csv = 'hex,color\n' + appData.all
+                .filter(hex => hex.properties.selected)
+                .map(hex => hex.properties.h3Index + ',' + hex.properties.color)
+                .join('\n');
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'hexagons.csv';
+            a.click();
+        });
+
+
+        // Function to update the display of selected hexagons
+        function updateSelectedHexagonsDisplay() {
+            const listElement = document.getElementById('selected-list');
+            listElement.innerHTML = '';
+
+
+
+            appData.all
+                .filter(hex => hex.properties.selected)
+                .forEach(hex => {
+
+                    const { h3Index, color } = hex.properties;
+
+                    const item = document.createElement('div');
+                    item.id = h3Index;
+                    item.textContent = h3Index + ' - ' + color;
+                    item.style.color = color;
+
+                    item.addEventListener('click', () => {
+                        const [lat, lng] = h3.cellToLatLng(h3Index);
+                        map.flyTo({
+                            center: [lng, lat],
+                            zoom: 8
+                        });
+                    });
+                    item.style.cursor = 'pointer';
+                    item.style.textDecoration = 'underline';
+
+                    listElement.appendChild(item);
+                });
+
+        }
+
+        // Function to convert polygon to H3 hexagons
+        function polygonToH3(polygon, resolution) {
+            const coordinates = polygon.geometry.coordinates[0];
+            // Convert to the format expected by h3.polygonToCells
+            const h3Polygon = coordinates.map(coord => [coord[1], coord[0]]);
+            // Get all hexagons within the polygon
+            return h3.polygonToCells(h3Polygon, resolution);
+        }
+
+        mapboxgl.accessToken = 'pk.eyJ1Ijoic2VyaHV6IiwiYSI6ImNseXpvc3RlczJpbnIya3FscDU2aHc5d3EifQ.FHtPjde_lqensSHZxqthgw';
+        const map = new mapboxgl.Map({
+            container: 'map',
+            style: 'mapbox://styles/mapbox/light-v11',
+            zoom: 3,
+            center: { lng: -102.44106443015511, lat: 39.671600770516164 },
+            projection: 'mercator'
+        });
+
+        map.on('load', async () => {
+
+            const csvData = await d3.csv("https://docs.google.com/spreadsheets/d/e/2PACX-1vTh0FM3N99ac2PQP3ISg4L62RFJEo3XKPa5qqDHvkPyXh8Z4Z11uh-2MY5SjkWqcnnqLbQHUzMh0L7x/pub?output=csv")
+            console.log('csvData', csvData);
+
+            // Define the H3 resolution from URL parameter
+            const h3Resolution = new URLSearchParams(window.location.search).get('res') ?? 3;
+            // Fill boundsHex with hexagons
+            const boundaryHexagons = polygonToH3(boundsHex.features[0], parseInt(h3Resolution));
+            console.log('Boundary hexagons:', boundaryHexagons);
+
+            // Convert to GeoJSON features
+            const boundaryFeatures = boundaryHexagons.map(h3Index => {
+                const boundary = h3.cellToBoundary(h3Index, true);
+
+                let border = 1;
+                let opcaity = 0.1;
+                let color = '#4285F4';
+                let selected = false;
+
+                csvData.find(code => {
+                    if (code.hex === h3Index) {
+                        border = 2;
+                        opcaity = 0.5;
+                        color = code.color !== "" ? code.color : '#4285F4';
+                        selected = true;
+
+                        selectedHexagons.set(h3Index, {
+                            h3Index,
+                            color
+                        });
+                    }
+                });
+
+                return {
+                    type: 'Feature',
+                    properties: {
+                        h3Index: h3Index,
+                        selected: selected,
+                        border: border,
+                        opacity: opcaity,
+                        color: color
+                    },
+                    geometry: {
+                        type: 'Polygon',
+                        coordinates: [boundary]
+                    }
+                };
+            });
+
+            appData.all = boundaryFeatures;
+            updateSelectedHexagonsDisplay()
+
+            // Add hexagons source with boundary hexagons
+            map.addSource('hexagons', {
+                type: 'geojson',
+                data: {
+                    type: 'FeatureCollection',
+                    features: boundaryFeatures
+                }
+            });
+
+            // Add layers for hexagons
+            map.addLayer({
+                id: 'hexagons-fill',
+                type: 'fill',
+                source: 'hexagons',
+                paint: {
+                    'fill-color': ['get', 'color'],
+                    'fill-opacity': [
+                        'case',
+                        ['boolean', ['get', 'selected'], false],
+                        0.5,
+                        0
+                    ]
+                }
+            });
+
+            map.addLayer({
+                id: 'hexagons-line',
+                type: 'line',
+                source: 'hexagons',
+                paint: {
+                    'line-color': 'black',
+                    'line-width': 0.5,
+                    'line-opacity': 0.5
+                }
+            });
+
+            // Add click handler for hexagons
+            map.on('click', 'hexagons-fill', (e) => {
+                if (e.features.length > 0) {
+                    const h3Index = e.features[0].properties.h3Index;
+
+                    console.log('h3Index', h3Index);
+
+                    appData.all.map(hex => {
+                        if (hex.properties.h3Index === h3Index && !hex.properties.selected) {
+                            hex.properties.selected = true;
+                            hex.properties.color = appData.currentColor;
+                        }
+                        else if (hex.properties.h3Index === h3Index && hex.properties.selected) {
+                            hex.properties.selected = false;
+                        }
+
+                        return hex
+                    });
+
+                    map.getSource('hexagons').setData({
+                        type: 'FeatureCollection',
+                        features: appData.all
+                    });
+
+                    updateSelectedHexagonsDisplay();
+
+                    // // Update the data
+                    // const features = map.getSource('hexagons')._data.features.map(f => {
+                    //     if (f.properties.h3Index === h3Index) {
+                    //         return {
+                    //             ...f,
+                    //             properties: {
+                    //                 ...f.properties,
+                    //                 selected: isSelected
+                    //             }
+                    //         };
+                    //     }
+                    //     return f;
+                    // });
+
+                    // // Update the source
+                    // map.getSource('hexagons').setData({
+                    //     type: 'FeatureCollection',
+                    //     features
+                    // });
+
+                    // // Update the display
+                    // updateSelectedHexagonsDisplay();
+
+
+                    // const isSelected = selectedHexagons.has(h3Index) ? false : true;
+
+                    // // Update the selected hexagons set
+                    // if (isSelected) {
+                    //     selectedHexagons.set(h3Index, {
+                    //         h3Index,
+                    //         color: e.features[0].properties.color
+                    //     });
+                    // } else {
+                    //     selectedHexagons.delete(h3Index);
+                    // }
+
+                    // // Update the data
+                    // const features = map.getSource('hexagons')._data.features.map(f => {
+                    //     if (f.properties.h3Index === h3Index) {
+                    //         return {
+                    //             ...f,
+                    //             properties: {
+                    //                 ...f.properties,
+                    //                 selected: isSelected
+                    //             }
+                    //         };
+                    //     }
+                    //     return f;
+                    // });
+
+                    // // Update the source
+                    // map.getSource('hexagons').setData({
+                    //     type: 'FeatureCollection',
+                    //     features
+                    // });
+
+                    // // Update the display
+                    // updateSelectedHexagonsDisplay();
+                }
+            });
+
+            // Change cursor to pointer when hovering over hexagons
+            map.on('mouseenter', 'hexagons-fill', () => {
+                map.getCanvas().style.cursor = 'pointer';
+            });
+
+            map.on('mouseleave', 'hexagons-fill', () => {
+                map.getCanvas().style.cursor = '';
+            });
+
+
+            map.addSource('rail', {
+                type: 'vector',
+                url: 'mapbox://serhuz.7ba5rjts'
+            });
+
+            map.addLayer(
+                {
+                    'id': 'rail-data',
+                    'type': 'line',
+                    'source': 'rail',
+                    'source-layer': 'North_American_Rail_Network_Lines',
+                    'layout': {
+                        'line-join': 'round',
+                        'line-cap': 'round'
+                    },
+                    'paint': {
+                        'line-color': '#ff69b4',
+                        'line-width': 1
+                    }
+                },
+                'road-label-simple' // Add layer below labels
+            );
+        });
+    </script>
+
+</body>
+
+</html>

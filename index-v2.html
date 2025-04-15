@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <title>Add a vector tile source</title>
+    <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
+    <link href="https://api.mapbox.com/mapbox-gl-js/v3.10.0/mapbox-gl.css" rel="stylesheet">
+    <script src="https://api.mapbox.com/mapbox-gl-js/v3.10.0/mapbox-gl.js"></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="h3-js.js"></script>
+
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+        }
+
+        #map {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 100%;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="map"></div>
+    <script>
+        mapboxgl.accessToken = 'pk.eyJ1IjoiZGV2b2VyYWlsc3RhdGUiLCJhIjoiY2wxNnZ1ejR0MDl2YjNicXNjd3R2dGx5ZCJ9.Y4aChG8-UtF_4FOQZF8R2Q';
+        const map = new mapboxgl.Map({
+            container: 'map',
+            style: 'mapbox://styles/mapbox/light-v11',
+            zoom: 3,
+            center: { lng: -102.44106443015511, lat: 39.671600770516164 },
+            projection: 'mercator',
+            maxZoom: 5
+        });
+
+        map.on('load', () => {
+
+            d3.csv("https://docs.google.com/spreadsheets/d/e/2PACX-1vTh0FM3N99ac2PQP3ISg4L62RFJEo3XKPa5qqDHvkPyXh8Z4Z11uh-2MY5SjkWqcnnqLbQHUzMh0L7x/pub?output=csv")
+                .then(function (data) {
+                    console.log(data);
+
+                    // Define the H3 resolution (0-15, where 15 is the finest resolution)
+                    const h3Resolution = new URLSearchParams(window.location.search).get('res') ?? 3
+
+                    // Create a Set to store unique hexagons
+                    const hexagons = new Set();
+
+                    // Process each data point
+                    const features = data.map(code => {
+
+                        console.log('code.color', code.color);
+
+                        // Get the boundary of the hexagon as a GeoJSON polygon
+                        const boundary = h3.cellToBoundary(code.hex, true); // true to return GeoJSON coordinates
+                        return {
+                            type: 'Feature',
+                            properties: {
+                                //h3Index: h3Index
+                                color: code.color !== "" ? code.color : '#4285F4'
+                            },
+                            geometry: {
+                                type: 'Polygon',
+                                coordinates: [boundary],
+
+                            }
+                        };
+                    });
+
+                    console.log('features', features);
+
+                    map.getSource('hexagons').setData({
+                        type: 'FeatureCollection',
+                        features: features
+                    });
+
+                });
+
+            map.addSource('rail', {
+                type: 'vector',
+                url: 'mapbox://devoerailstate.cvm6ll9k'
+            });
+            map.addLayer(
+                {
+                    'id': 'rail-data',
+                    'type': 'line',
+                    'source': 'rail',
+                    'source-layer': 'North_American_Rail_Network_Lines',
+                    'layout': {
+                        'line-join': 'round',
+                        'line-cap': 'round'
+                    },
+                    'paint': {
+                        'line-color': '#ccc',
+                        'line-width': 1
+                    }
+                },
+                'road-label-simple' // Add layer below labels
+            );
+
+
+            // Add the hexagons as a new source
+            map.addSource('hexagons', {
+                type: 'geojson',
+                data: {
+                    type: 'FeatureCollection',
+                    features: []
+                }
+            });
+
+            // Add a layer to display the hexagons
+            map.addLayer({
+                id: 'hexagons-fill',
+                type: 'fill',
+                source: 'hexagons',
+                paint: {
+                    'fill-color': ['get', 'color'],
+                    'fill-opacity': 0.6
+                }
+            });
+
+            // Add an outline to the hexagons
+            map.addLayer({
+                id: 'hexagons-line',
+                type: 'line',
+                source: 'hexagons',
+                paint: {
+                    'line-color': '#4285F4',
+                    'line-width': 0.5,
+                    'line-opacity': 0.1
+                }
+            });
+        });
+    </script>
+
+</body>
+
+</html>

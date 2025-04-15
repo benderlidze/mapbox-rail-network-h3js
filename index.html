@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <title>Add a vector tile source</title>
+    <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
+    <link href="https://api.mapbox.com/mapbox-gl-js/v3.10.0/mapbox-gl.css" rel="stylesheet">
+    <script src="https://api.mapbox.com/mapbox-gl-js/v3.10.0/mapbox-gl.js"></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://unpkg.com/h3-js"></script>
+
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+        }
+
+        #map {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 100%;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="map"></div>
+    <script>
+        mapboxgl.accessToken = 'pk.eyJ1Ijoic2VyaHV6IiwiYSI6ImNseXpvc3RlczJpbnIya3FscDU2aHc5d3EifQ.FHtPjde_lqensSHZxqthgw';
+        const map = new mapboxgl.Map({
+            container: 'map',
+            style: 'mapbox://styles/mapbox/light-v11',
+            zoom: 3,
+            center: { lng: -102.44106443015511, lat: 39.671600770516164 },
+            projection: 'mercator'
+        });
+
+        map.on('load', () => {
+
+            d3.csv("https://docs.google.com/spreadsheets/d/e/2PACX-1vTh0FM3N99ac2PQP3ISg4L62RFJEo3XKPa5qqDHvkPyXh8Z4Z11uh-2MY5SjkWqcnnqLbQHUzMh0L7x/pub?output=csv")
+                .then(function (data) {
+                    console.log(data);
+
+                    // Define the H3 resolution (0-15, where 15 is the finest resolution)
+                    const h3Resolution = new URLSearchParams(window.location.search).get('res') ?? 3
+
+                    // Create a Set to store unique hexagons
+                    const hexagons = new Set();
+
+                    // Process each data point
+                    data.forEach(point => {
+                        // Check if the point has lat/lng coordinates
+                        const lat = parseFloat(point.Latitude);
+                        const lng = parseFloat(point.Longitude);
+
+
+                        // Convert lat/lng to H3 index
+                        const h3Index = h3.latLngToCell(lat, lng, h3Resolution);
+                        console.log('h3Index', h3Index);
+                        hexagons.add(h3Index);
+                    });
+
+                    console.log('data', data);
+                    console.log('hexagons', hexagons);
+
+                    // Convert hexagons to GeoJSON
+                    const features = Array.from(hexagons).map(h3Index => {
+                        // Get the boundary of the hexagon as a GeoJSON polygon
+                        const boundary = h3.cellToBoundary(h3Index, true); // true to return GeoJSON coordinates
+                        return {
+                            type: 'Feature',
+                            properties: {
+                                h3Index: h3Index
+                            },
+                            geometry: {
+                                type: 'Polygon',
+                                coordinates: [boundary]
+                            }
+                        };
+                    });
+
+                    console.log('features', features);
+
+                    map.getSource('hexagons').setData({
+                        type: 'FeatureCollection',
+                        features: features
+                    });
+
+                });
+
+            map.addSource('rail', {
+                type: 'vector',
+                url: 'mapbox://serhuz.7ba5rjts'
+            });
+            map.addLayer(
+                {
+                    'id': 'rail-data',
+                    'type': 'line',
+                    'source': 'rail',
+                    'source-layer': 'North_American_Rail_Network_Lines',
+                    'layout': {
+                        'line-join': 'round',
+                        'line-cap': 'round'
+                    },
+                    'paint': {
+                        'line-color': '#ff69b4',
+                        'line-width': 1
+                    }
+                },
+                'road-label-simple' // Add layer below labels
+            );
+
+
+            // Add the hexagons as a new source
+            map.addSource('hexagons', {
+                type: 'geojson',
+                data: {
+                    type: 'FeatureCollection',
+                    features: []
+                }
+            });
+
+            // Add a layer to display the hexagons
+            map.addLayer({
+                id: 'hexagons-fill',
+                type: 'fill',
+                source: 'hexagons',
+                paint: {
+                    'fill-color': '#4285F4',
+                    'fill-opacity': 0.3
+                }
+            });
+
+            // Add an outline to the hexagons
+            map.addLayer({
+                id: 'hexagons-line',
+                type: 'line',
+                source: 'hexagons',
+                paint: {
+                    'line-color': '#4285F4',
+                    'line-width': 0.5,
+                    'line-opacity': 0.1
+                }
+            });
+        });
+    </script>
+
+</body>
+
+</html>
