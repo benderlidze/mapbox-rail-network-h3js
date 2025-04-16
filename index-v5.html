@@ -163,7 +163,7 @@
                 checkbox.type = 'checkbox';
                 checkbox.className = 'facility-checkbox';
                 checkbox.id = `filter-${facilityType.replace(/\s+/g, '-')}`;
-                checkbox.checked = true; // Default to checked
+                checkbox.checked = false; // Default to checked
                 checkbox.addEventListener('change', (e) => {
                     filterFacilities();
                 });
@@ -205,14 +205,21 @@
                 }
             });
 
+            // If no facility types are selected, show no facilities
+            if (selectedFacilityTypes.length === 0) {
+                map.getSource('facilities').setData({
+                    type: 'FeatureCollection',
+                    features: []
+                });
+                return;
+            }
+
             // Filter facilities by both company name and facility type
             const filtered = appData.facilityGeoJSON.filter(item => {
                 const matchesSearchText = item.properties['Company'] &&
                     item.properties['Company'].toLowerCase().includes(searchText.toLowerCase());
-
                 const facilityType = item.properties['Facility Type'];
                 const matchesFacilityType = selectedFacilityTypes.includes(facilityType);
-
                 return matchesSearchText && matchesFacilityType;
             });
 
@@ -252,10 +259,10 @@
                             };
                         });
                     console.log('features', features);
-                    map.getSource('facilities').setData({
-                        type: 'FeatureCollection',
-                        features: features
-                    });
+                    // map.getSource('facilities').setData({
+                    //     type: 'FeatureCollection',
+                    //     features: features
+                    // });
 
                     appData.facilityGeoJSON = features; // Store the GeoJSON data
 
@@ -320,6 +327,9 @@
                     // Generate the legend
                     generateLegend();
 
+                    // Apply initial filter to hide all points since all checkboxes are off by default
+                    // filterFacilities();
+
                     // Update the circle colors based on facility type
                     map.setPaintProperty('facilities', 'circle-color', [
                         'match',
@@ -381,7 +391,15 @@
                         "UP", "#E1BC29",
                         /* other values */ '#ccc' // default color
                     ],
-                    'line-width': 2
+                    'line-width': [
+                        'interpolate',
+                        ['linear'],
+                        ['zoom'],
+                        0, 0.5,
+                        8, 1,
+                        12, 2,
+                        22, 10
+                    ]
                 }
             }, 'road-label-simple' // Add layer below labels
             );
@@ -413,7 +431,15 @@
                             "UP", "#E1BC29",
                         /* other values */ '#ccc' // default color
                         ],
-                        'line-width': 2
+                        'line-width': [
+                            'interpolate',
+                            ['linear'],
+                            ['zoom'],
+                            0, 0.5,
+                            8, 1,
+                            12, 2,
+                            22, 10
+                        ]
                     }
                 },
                 'road-label-simple' // Add layer below labels
@@ -440,7 +466,7 @@
             }, 'rail-data');
 
             map.on('zoom', () => {
-                map.getZoom() < 10 ? map.setLayoutProperty('satellite-layer', 'visibility', 'none') : map.setLayoutProperty('satellite-layer', 'visibility', 'visible');
+                map.getZoom() < 12 ? map.setLayoutProperty('satellite-layer', 'visibility', 'none') : map.setLayoutProperty('satellite-layer', 'visibility', 'visible');
             });
 
 
@@ -574,3 +600,4 @@
 </body>
 
 </html>
+```
