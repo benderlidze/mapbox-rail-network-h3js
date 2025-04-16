@@ -188,60 +188,38 @@
             });
         }
 
-        // Function to filter facilities by company name
-        function filterFacilitiesByCompany(searchText) {
-            const lowerSearchText = searchText.toLowerCase();
-
-            // If search is empty, just apply the facility type filters
-            if (!searchText) {
-                filterFacilities();
-                return;
+        // Unified filter function for both facility type and company name
+        function filterFacilities(searchText) {
+            // Get search text from parameter or input field
+            if (searchText === undefined) {
+                searchText = document.getElementById('company-search').value;
             }
 
             // Get the currently selected facility types
-            const selectedTypes = appData.facilityFilters.filter(type => {
-                const checkbox = document.getElementById(`filter-${type.replace(/\s+/g, '-')}`);
-                return checkbox && checkbox.checked;
+            const selectedFacilityTypes = [];
+            document.querySelectorAll('.facility-checkbox').forEach(checkbox => {
+                if (checkbox.checked) {
+                    // Extract facility type from the checkbox ID
+                    const facilityType = checkbox.id.replace('filter-', '').replace(/-/g, ' ');
+                    selectedFacilityTypes.push(facilityType);
+                }
             });
 
-            // Filter by both company name and selected facility types
-            map.setFilter('facilities', [
-                'all',
-                [
-                    'in',
-                    ['get', 'Facility Type'],
-                    ['literal', selectedTypes]
-                ],
-                [
-                    'to-boolean',
-                    [
-                        'regexp',
-                        ['downcase', ['get', 'Company']],
-                        lowerSearchText
-                    ]
-                ]
-            ]);
-        }
+            // Filter facilities by both company name and facility type
+            const filtered = appData.facilityGeoJSON.filter(item => {
+                const matchesSearchText = item.properties['Company'] &&
+                    item.properties['Company'].toLowerCase().includes(searchText.toLowerCase());
 
-        // Filter facilities based on checkbox selection
-        function filterFacilities() {
-            const selectedTypes = appData.facilityFilters.filter(type => {
-                const checkbox = document.getElementById(`filter-${type.replace(/\s+/g, '-')}`);
-                return checkbox && checkbox.checked;
+                const facilityType = item.properties['Facility Type'];
+                const matchesFacilityType = selectedFacilityTypes.includes(facilityType);
+
+                return matchesSearchText && matchesFacilityType;
             });
 
-            // Also apply any existing company name filter
-            const searchInput = document.getElementById('company-search');
-            if (searchInput.value) {
-                filterFacilitiesByCompany(searchInput.value);
-                return;
-            }
-
-            map.setFilter('facilities',
-                ['in',
-                    ['get', 'Facility Type'],
-                    ['literal', selectedTypes]
-                ]);
+            map.getSource('facilities').setData({
+                type: 'FeatureCollection',
+                features: filtered
+            });
         }
 
         map.on('load', () => {
@@ -548,7 +526,7 @@
 
             // Add the company search event listener
             document.getElementById('company-search').addEventListener('input', (e) => {
-                filterFacilitiesByCompany(e.target.value);
+                filterFacilities(e.target.value);
             });
 
         });
