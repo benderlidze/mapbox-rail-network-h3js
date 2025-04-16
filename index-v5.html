@@ -90,6 +90,22 @@
         #open-csv-btn:hover {
             background: #444;
         }
+
+        /* Search input styles */
+        #company-search {
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 10px;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+            font-family: 'Poppins', sans-serif;
+            font-size: 13px;
+            box-sizing: border-box;
+        }
+
+        #company-search::placeholder {
+            color: #999;
+        }
     </style>
 </head>
 
@@ -98,6 +114,7 @@
     <div id="legend">
         <button id="open-csv-btn">Open CSV</button>
         <input type="file" id="csv-file-input" accept=".csv" style="display:none" />
+        <input type="text" id="company-search" placeholder="Filter by company name..." />
         <div class="legend-title">Facility Types</div>
         <div id="legend-items"></div>
     </div>
@@ -105,6 +122,7 @@
         const appData = {
             facilityFilters: [],
             facilityColors: {}, // Will store the mapping of facility types to colors
+            facilityGeoJSON: [],
         }
 
         // Define a set of contrasting colors for the facility types
@@ -170,12 +188,54 @@
             });
         }
 
+        // Function to filter facilities by company name
+        function filterFacilitiesByCompany(searchText) {
+            const lowerSearchText = searchText.toLowerCase();
+
+            // If search is empty, just apply the facility type filters
+            if (!searchText) {
+                filterFacilities();
+                return;
+            }
+
+            // Get the currently selected facility types
+            const selectedTypes = appData.facilityFilters.filter(type => {
+                const checkbox = document.getElementById(`filter-${type.replace(/\s+/g, '-')}`);
+                return checkbox && checkbox.checked;
+            });
+
+            // Filter by both company name and selected facility types
+            map.setFilter('facilities', [
+                'all',
+                [
+                    'in',
+                    ['get', 'Facility Type'],
+                    ['literal', selectedTypes]
+                ],
+                [
+                    'to-boolean',
+                    [
+                        'regexp',
+                        ['downcase', ['get', 'Company']],
+                        lowerSearchText
+                    ]
+                ]
+            ]);
+        }
+
         // Filter facilities based on checkbox selection
         function filterFacilities() {
             const selectedTypes = appData.facilityFilters.filter(type => {
                 const checkbox = document.getElementById(`filter-${type.replace(/\s+/g, '-')}`);
                 return checkbox && checkbox.checked;
             });
+
+            // Also apply any existing company name filter
+            const searchInput = document.getElementById('company-search');
+            if (searchInput.value) {
+                filterFacilitiesByCompany(searchInput.value);
+                return;
+            }
 
             map.setFilter('facilities',
                 ['in',
@@ -185,8 +245,6 @@
         }
 
         map.on('load', () => {
-
-
 
             const popup = new mapboxgl.Popup({
                 closeButton: true,
@@ -220,6 +278,8 @@
                         type: 'FeatureCollection',
                         features: features
                     });
+
+                    appData.facilityGeoJSON = features; // Store the GeoJSON data
 
                     // Remove duplicates from the filters array
                     const uniqueFilters = [...new Set(filters)];
@@ -486,10 +546,10 @@
                 }
             });
 
-
-
-
-
+            // Add the company search event listener
+            document.getElementById('company-search').addEventListener('input', (e) => {
+                filterFacilitiesByCompany(e.target.value);
+            });
 
         });
 
