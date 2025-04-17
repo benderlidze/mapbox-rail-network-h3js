@@ -126,12 +126,12 @@
         }
 
         // Define a set of contrasting colors for the facility types
-        const colorArray = [
-            '#e6194B', '#3cb44b', '#ffe119', '#4363d8', '#f58231',
-            '#911eb4', '#42d4f4', '#f032e6', '#bfef45', '#fabed4',
-            '#469990', '#dcbeff', '#9A6324', '#fffac8', '#800000',
-            '#aaffc3', '#808000', '#ffd8b1', '#000075', '#a9a9a9'
-        ];
+        // const colorArray = [
+        //     '#e6194B', '#3cb44b', '#ffe119', '#4363d8', '#f58231',
+        //     '#911eb4', '#42d4f4', '#f032e6', '#bfef45', '#fabed4',
+        //     '#469990', '#dcbeff', '#9A6324', '#fffac8', '#800000',
+        //     '#aaffc3', '#808000', '#ffd8b1', '#000075', '#a9a9a9'
+        // ];
 
         const lightStyle = 'mapbox://styles/mapbox/light-v11';
         const satelliteStyle = 'mapbox://styles/mapbox/satellite-streets-v12';
@@ -146,13 +146,14 @@
         });
 
         // Function to generate the legend with checkboxes
-        function generateLegend() {
+        function generateLegend(colorsFromCSV) {
+            console.log(colorsFromCSV);
             const legendContainer = document.getElementById('legend-items');
             legendContainer.innerHTML = ''; // Clear existing items
 
             appData.facilityFilters.forEach((facilityType, index) => {
                 // Assign color from the array (cycle through if more types than colors)
-                const color = colorArray[index % colorArray.length];
+                const color = colorsFromCSV.get(facilityType) || '#FF0000'; // Default to red if not found
                 appData.facilityColors[facilityType] = color;
 
                 const legendItem = document.createElement('div');
@@ -240,13 +241,16 @@
             d3.csv("https://docs.google.com/spreadsheets/d/e/2PACX-1vS1pdMPpTJoSOsaItrHRG7y_zhf4rrRVC-hLCMdR77hx_6JyYgDVTs-U5S-3Bp1tMkVOhm6V4l6qkqF/pub?output=csv")
                 .then(function (data) {
                     console.log(data);
-
+                    const colorsFromCSV = new Map();
                     const filters = []
                     // Process each data point
                     const features = data
                         .filter(code => code.latitude && code.longitude)
                         .map(code => {
                             filters.push(code['Facility Type'])
+
+                            colorsFromCSV.set(code['Facility Type'], code['Color']);
+
                             return {
                                 type: 'Feature',
                                 properties: {
@@ -325,7 +329,7 @@
                     });
 
                     // Generate the legend
-                    generateLegend();
+                    generateLegend(colorsFromCSV);
 
                     // Apply initial filter to hide all points since all checkboxes are off by default
                     // filterFacilities();
