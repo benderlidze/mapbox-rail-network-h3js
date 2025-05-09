@@ -36,7 +36,7 @@
             center: { lng: -102.44106443015511, lat: 39.671600770516164 },
             projection: 'mercator',
             maxZoom: 5,
-            cooperativeGestures: true
+            cooperativeGestures: window.innerWidth < 768 ? true : false
         });
 
         map.on('load', () => {
