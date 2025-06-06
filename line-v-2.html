@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <title>Add a vector tile source</title>
+    <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
+    <link href="https://api.mapbox.com/mapbox-gl-js/v3.10.0/mapbox-gl.css" rel="stylesheet">
+    <script src="https://api.mapbox.com/mapbox-gl-js/v3.10.0/mapbox-gl.js"></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="h3-js.js"></script>
+    <script src="https://unpkg.com/@turf/turf@7/turf.min.js"></script>
+
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+        }
+
+        #map {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 100%;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="map"></div>
+    <script>
+        mapboxgl.accessToken = 'pk.eyJ1IjoiZGV2b2VyYWlsc3RhdGUiLCJhIjoiY2wxNnZ1ejR0MDl2YjNicXNjd3R2dGx5ZCJ9.Y4aChG8-UtF_4FOQZF8R2Q';
+        const map = new mapboxgl.Map({
+            container: 'map',
+            style: 'mapbox://styles/mapbox/satellite-v9',
+            zoom: 7,
+            center: { lng: -104.50357052498265, lat: 37.133902886029645 },
+            projection: 'mercator',
+            cooperativeGestures: window.innerWidth < 768 ? true : false
+        });
+
+        map.on('load', () => {
+
+            map.addSource('rail', {
+                type: 'vector',
+                url: 'mapbox://devoerailstate.cvm6ll9k'
+            });
+            map.addLayer(
+                {
+                    'id': 'rail-data',
+                    'type': 'line',
+                    'source': 'rail',
+                    'source-layer': 'North_American_Rail_Network_Lines',
+                    'layout': {
+                        'line-join': 'round',
+                        'line-cap': 'round'
+                    },
+                    'paint': {
+                        'line-color': '#ccc',
+                        'line-width': 3
+                    }
+                },
+            );
+
+            // Add source for highlighted rail segments
+            map.addSource('highlighted-rail', {
+                type: 'geojson',
+                data: {
+                    type: 'FeatureCollection',
+                    features: []
+                }
+            });
+
+            // Add layer for highlighted rail segments
+            map.addLayer({
+                'id': 'highlighted-rail-layer',
+                'type': 'line',
+                'source': 'highlighted-rail',
+                'layout': {
+                    'line-join': 'round',
+                    'line-cap': 'round'
+                },
+                'paint': {
+                    'line-color': '#ff0000',
+                    'line-width': 5
+                }
+            });
+
+            let currentMarker = null;
+
+            // Variables for start and end markers
+            let startMarker = null;
+            let endMarker = null;
+            let clickCount = 0;
+
+            // Add click event listener
+            map.on('click', (e) => {
+                clickCount++;
+
+                if (clickCount === 1) {
+                    // First click - set start marker
+                    if (startMarker) startMarker.remove();
+                    startMarker = new mapboxgl.Marker({ color: 'green' })
+                        .setLngLat(e.lngLat)
+                        .addTo(map);
+
+                    // Clear any existing highlighted path
+                    map.getSource('highlighted-rail').setData({
+                        type: 'FeatureCollection',
+                        features: []
+                    });
+
+                } else if (clickCount === 2) {
+                    // Second click - set end marker and find path
+                    if (endMarker) endMarker.remove();
+                    endMarker = new mapboxgl.Marker({ color: 'red' })
+                        .setLngLat(e.lngLat)
+                        .addTo(map);
+
+                    // Find shortest path between markers
+                    findShortestPath(startMarker.getLngLat(), endMarker.getLngLat());
+
+                    // Reset click count
+                    clickCount = 0;
+                }
+            });            // Function to find shortest path along rail network
+            function findShortestPath(start, end) {
+                // Create points using Turf
+                const startPoint = turf.point([start.lng, start.lat]);
+                const endPoint = turf.point([end.lng, end.lat]);
+
+                // Query all rail features in the current view
+                const bbox = map.getBounds();
+                const features = map.queryRenderedFeatures(
+                    { bbox, layerId: 'rail-data' }
+                );
+
+                if (features.length === 0) return;
+
+                // Build a simple graph from rail segments
+                const graph = buildRailGraph(features);
+
+                console.log('graph', graph);                // Find closest nodes to start and end points using Turf
+                const startNode = findClosestNodeWithTurf(graph, startPoint);
+                const endNode = findClosestNodeWithTurf(graph, endPoint);
+
+                // Also try to snap to nearest point on any rail line for better accuracy
+                const snappedStart = snapToNearestRail(features, startPoint);
+                const snappedEnd = snapToNearestRail(features, endPoint);
+
+                console.log('startNode', startNode);
+                console.log('endNode', endNode);
+                console.log('snappedStart', snappedStart);
+                console.log('snappedEnd', snappedEnd);
+
+                if (!startNode || !endNode) return;
+
+                // Find shortest path using Dijkstra's algorithm
+                const path = dijkstra(graph, startNode, endNode);
+
+                console.log('path', path);
+
+                if (path && path.length > 0) {
+                    // Create path using Turf lineString
+                    const pathFeature = turf.lineString(path);
+
+                    // Highlight the path
+                    map.getSource('highlighted-rail').setData({
+                        type: 'FeatureCollection',
+                        features: [pathFeature]
+                    });
+                }
+            }
+
+            // Build graph from rail features
+            function buildRailGraph(features) {
+                const nodes = new Map();
+                const edges = [];
+
+                features.forEach(feature => {
+                    if (feature.geometry.type === 'LineString') {
+                        const coords = feature.geometry.coordinates; for (let i = 0; i < coords.length - 1; i++) {
+                            const from = coordToString(coords[i]);
+                            const to = coordToString(coords[i + 1]);
+
+                            nodes.set(from, coords[i]);
+                            nodes.set(to, coords[i + 1]);
+
+                            // Use Turf to calculate distance between points
+                            const point1 = turf.point(coords[i]);
+                            const point2 = turf.point(coords[i + 1]);
+                            const distance = turf.distance(point1, point2, { units: 'kilometers' });
+
+                            edges.push({ from, to, distance, coords: [coords[i], coords[i + 1]] });
+                        }
+                    }
+                });
+
+                return { nodes, edges };
+            }            // Find closest node in graph to a given point using Turf's nearestPoint
+            function findClosestNodeWithTurf(graph, targetPoint) {
+                // Convert graph nodes to a FeatureCollection for Turf
+                const nodeFeatures = [];
+                for (const [nodeId, nodeCoord] of graph.nodes) {
+                    nodeFeatures.push(turf.point(nodeCoord, { nodeId: nodeId }));
+                }
+
+                const nodeCollection = turf.featureCollection(nodeFeatures);
+                const nearest = turf.nearestPoint(targetPoint, nodeCollection);
+
+                console.log('nearest', nearest);
+
+                return nearest.properties.nodeId;
+            }
+
+            // Legacy function for backwards compatibility
+            function findClosestNode(graph, point) {
+                const targetPoint = turf.point([point.lng || point[0], point.lat || point[1]]);
+                return findClosestNodeWithTurf(graph, targetPoint);
+            }
+
+            // Dijkstra's shortest path algorithm
+            function dijkstra(graph, start, end) {
+                const distances = new Map();
+                const previous = new Map();
+                const unvisited = new Set();
+
+                // Initialize distances
+                for (const [nodeId] of graph.nodes) {
+                    distances.set(nodeId, nodeId === start ? 0 : Infinity);
+                    unvisited.add(nodeId);
+                }
+
+                while (unvisited.size > 0) {
+                    // Find unvisited node with minimum distance
+                    let current = null;
+                    let minDist = Infinity;
+                    for (const nodeId of unvisited) {
+                        if (distances.get(nodeId) < minDist) {
+                            minDist = distances.get(nodeId);
+                            current = nodeId;
+                        }
+                    }
+
+                    if (!current || current === end) break;
+
+                    unvisited.delete(current);
+
+                    // Check neighbors
+                    const neighbors = graph.edges.filter(edge =>
+                        edge.from === current || edge.to === current
+                    );
+
+                    for (const edge of neighbors) {
+                        const neighbor = edge.from === current ? edge.to : edge.from;
+                        if (!unvisited.has(neighbor)) continue;
+
+                        const alt = distances.get(current) + edge.distance;
+                        if (alt < distances.get(neighbor)) {
+                            distances.set(neighbor, alt);
+                            previous.set(neighbor, current);
+                        }
+                    }
+                }
+
+                // Reconstruct path
+                if (!previous.has(end)) return null;
+
+                const path = [];
+                let current = end;
+                while (current) {
+                    path.unshift(graph.nodes.get(current));
+                    current = previous.get(current);
+                }
+
+                return path;
+            }            // Helper functions
+            function coordToString(coord) {
+                return `${coord[0].toFixed(6)},${coord[1].toFixed(6)}`;
+            }            // Legacy distance function using simple Euclidean distance
+            function getDistance(coord1, coord2) {
+                const point1 = turf.point(coord1);
+                const point2 = turf.point(coord2);
+                return turf.distance(point1, point2, { units: 'kilometers' });
+            }
+
+            // Snap point to nearest rail line using Turf
+            function snapToNearestRail(features, point) {
+                let nearestPoint = null;
+                let minDistance = Infinity;
+
+                features.forEach(feature => {
+                    if (feature.geometry.type === 'LineString') {
+                        const line = turf.lineString(feature.geometry.coordinates);
+                        const snapped = turf.nearestPointOnLine(line, point);
+                        const distance = turf.distance(point, snapped, { units: 'kilometers' });
+
+                        if (distance < minDistance) {
+                            minDistance = distance;
+                            nearestPoint = snapped;
+                        }
+                    }
+                });
+
+                return nearestPoint;
+            }
+
+        });
+    </script>
+
+</body>
+
+</html>
