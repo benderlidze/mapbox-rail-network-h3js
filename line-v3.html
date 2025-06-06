@@ -15,6 +15,7 @@
         body {
             margin: 0;
             padding: 0;
+            font-family: Arial, Helvetica, sans-serif;
         }
 
         #map {
@@ -23,12 +24,107 @@
             bottom: 0;
             width: 100%;
         }
+
+        #generate {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background-color: #fff;
+            padding: 10px;
+            border-radius: 5px;
+            cursor: pointer;
+            z-index: 1;
+        }
     </style>
 </head>
 
 <body>
     <div id="map"></div>
+    <div id="generate">Generate images</div>
     <script>
+
+        const appData = {
+            points: [],
+            curZoom: 7,
+        };
+
+        const generateImagesButton = document.getElementById('generate');
+        generateImagesButton.addEventListener('click', async () => {
+            if (appData.points.length === 0) {
+                alert('No route points available. Please select a route first.');
+                return;
+            }
+
+            // Extract coordinates from points
+            const coordinates = appData.points.map(point => ({
+                lng: point.geometry.coordinates[0],
+                lat: point.geometry.coordinates[1],
+                distance: point.properties.distance
+            }));
+
+            // Generate images for each point
+            await generateStaticImages(coordinates, {
+                width: 1024,
+                height: 1024,
+                zoom: 13,
+                style: 'satellite-v9'
+            });
+        });
+
+        // Function to generate and download static Mapbox images
+        async function generateStaticImages(coordinates, options = {}) {
+            const {
+                width = 1024,
+                height = 1024,
+                zoom = 10,
+                style = 'satellite-v9'
+            } = options;
+
+            const accessToken = mapboxgl.accessToken;
+            let downloadCount = 0;
+
+            for (let i = 0; i < coordinates.length; i++) {
+                const coord = coordinates[i];
+
+                try {
+                    // Create the Mapbox Static API URL
+                    const staticUrl = `https://api.mapbox.com/styles/v1/mapbox/${style}/static/${coord.lng},${coord.lat},${zoom}/${width}x${height}?access_token=${accessToken}`;
+
+                    // Fetch the image
+                    const response = await fetch(staticUrl);
+
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+
+                    const blob = await response.blob();
+
+                    // Create download link
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `route_point_${i + 1}_${coord.distance}km_${coord.lat.toFixed(6)}_${coord.lng.toFixed(6)}.png`;
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
+
+                    downloadCount++;
+                    console.log(`Downloaded image ${downloadCount}/${coordinates.length}: ${a.download}`);
+
+                    // Add a small delay to avoid rate limiting
+                    await new Promise(resolve => setTimeout(resolve, 500));
+
+                } catch (error) {
+                    console.error(`Error downloading image for coordinate ${i + 1}:`, error);
+                }
+            }
+
+            alert(`Download complete! ${downloadCount} images downloaded.`);
+        }
+
+
+
         mapboxgl.accessToken = 'pk.eyJ1IjoiZGV2b2VyYWlsc3RhdGUiLCJhIjoiY2wxNnZ1ejR0MDl2YjNicXNjd3R2dGx5ZCJ9.Y4aChG8-UtF_4FOQZF8R2Q';
         const map = new mapboxgl.Map({
             container: 'map',
@@ -69,9 +165,7 @@
                     type: 'FeatureCollection',
                     features: []
                 }
-            });
-
-            // Add layer for highlighted rail segments
+            });            // Add layer for highlighted rail segments
             map.addLayer({
                 'id': 'highlighted-rail-layer',
                 'type': 'line',
@@ -84,6 +178,35 @@
                     'line-color': '#ff0000',
                     'line-width': 5
                 }
+            });
+
+            // Add source for route markers
+            map.addSource('route-markers', {
+                type: 'geojson',
+                data: {
+                    type: 'FeatureCollection',
+                    features: []
+                }
+            });
+
+            // Add layer for route markers (circles)
+            map.addLayer({
+                'id': 'route-markers-layer',
+                'type': 'circle',
+                'source': 'route-markers',
+                'paint': {
+                    'circle-radius': 4,
+                    'circle-color': '#00ff00',
+                    'circle-opacity': 0.8,
+                    'circle-stroke-width': 2,
+                    'circle-stroke-color': '#ffffff'
+                }
+            });
+
+            map.on("moveend", () => {
+                // Update appData with current zoom level
+                appData.curZoom = map.getZoom();
+                console.log('Current zoom level:', appData.curZoom);
             });
 
             let currentMarker = null;
@@ -102,10 +225,12 @@
                     if (startMarker) startMarker.remove();
                     startMarker = new mapboxgl.Marker({ color: 'green' })
                         .setLngLat(e.lngLat)
-                        .addTo(map);
-
-                    // Clear any existing highlighted path
+                        .addTo(map);                    // Clear any existing highlighted path and markers
                     map.getSource('highlighted-rail').setData({
+                        type: 'FeatureCollection',
+                        features: []
+                    });
+                    map.getSource('route-markers').setData({
                         type: 'FeatureCollection',
                         features: []
                     });
@@ -158,9 +283,7 @@
                 // Find shortest path using Dijkstra's algorithm
                 const path = dijkstra(graph, startNode, endNode);
 
-                console.log('path', path);
-
-                if (path && path.length > 0) {
+                console.log('path', path); if (path && path.length > 0) {
                     // Create path using Turf lineString
                     const pathFeature = turf.lineString(path);
 
@@ -169,6 +292,12 @@
                         type: 'FeatureCollection',
                         features: [pathFeature]
                     });
+
+                    // Add markers along the route at specified intervals
+                    const points = addMarkersAlongRoute(pathFeature, 0.5); // 0.5 km = 500 meters
+                    console.log('points', points);
+                    // Store points in appData for further processing
+                    appData.points = points
                 }
             }
 
@@ -288,9 +417,7 @@
                 const point1 = turf.point(coord1);
                 const point2 = turf.point(coord2);
                 return turf.distance(point1, point2, { units: 'kilometers' });
-            }
-
-            // Snap point to nearest rail line using Turf
+            }            // Snap point to nearest rail line using Turf
             function snapToNearestRail(features, point) {
                 let nearestPoint = null;
                 let minDistance = Infinity;
@@ -309,6 +436,40 @@
                 });
 
                 return nearestPoint;
+            }
+
+            // Add markers along route at specified intervals
+            function addMarkersAlongRoute(lineFeature, intervalKm) {
+                const line = lineFeature.geometry;
+                const totalLength = turf.length(lineFeature, { units: 'kilometers' });
+                const markers = [];
+
+                // Create markers at specified intervals
+                for (let distance = 0; distance <= totalLength; distance += intervalKm) {
+                    try {
+                        const point = turf.along(lineFeature, distance, { units: 'kilometers' });
+
+                        // Add properties to the marker point
+                        point.properties = {
+                            distance: distance.toFixed(2),
+                            markerType: 'route-interval'
+                        };
+
+                        markers.push(point);
+                    } catch (error) {
+                        console.warn('Error creating marker at distance', distance, error);
+                    }
+                }
+
+                // Update the route markers source
+                map.getSource('route-markers').setData({
+                    type: 'FeatureCollection',
+                    features: markers
+                });
+
+                console.log(`Added ${markers} markers along route (${totalLength.toFixed(2)} km total)`);
+
+                return markers;
             }
 
         });
