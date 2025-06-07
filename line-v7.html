@@ -189,7 +189,8 @@
                         ['get', 'color'],
                         '#ff0000'
                     ],
-                    'line-width': 5,
+                    'line-width': 1,
+                    'line-opacity': 0.2
                 }
             });
 
@@ -210,6 +211,33 @@
                     'circle-opacity': 1
                 }
             });
+
+            map.addSource('nLines', {
+                type: 'geojson',
+                data: {
+                    type: 'FeatureCollection',
+                    features: []
+                }
+            });
+            map.addLayer({
+                'id': 'nLines-layer',
+                'type': 'line',
+                'source': 'nLines',
+                'layout': {
+                    'line-join': 'round',
+                    'line-cap': 'round'
+                },
+                'paint': {
+                    'line-color': [
+                        'case',
+                        ['has', 'color'],
+                        ['get', 'color'],
+                        '#ff0000'
+                    ],
+                    'line-width': 20,
+                    'line-opacity': 0.5
+                }
+            });
         });
 
 
@@ -226,10 +254,54 @@
 
             console.log('geometry', geometry);
 
+            const colored = geometry.map(item => {
+                return {
+                    type: 'Feature',
+                    geometry: item.geometry,
+                    properties: {
+                        color: 'blue', // Default color for lines
+                    }
+                };
+            });
+            console.log('colored', colored);
+
+            const turfFlattened = turf.flatten(turf.featureCollection(colored));
+
+            map.getSource('nLines').setData({
+                type: 'FeatureCollection',
+                features: turfFlattened.features
+            });
+
+
+
             const flat = geometry.map(item => item.geometry.coordinates)
             console.log('flat', flat);
 
             const flattenedPairs = getAllArray2Elements(flat);
+
+            const normalized = normalizeLines(flat);
+            console.log('normalized!!!!!!!!!!', normalized);
+
+            // const norm = normalized.map(line => {
+            //     return {
+            //         type: 'Feature',
+            //         geometry: {
+            //             type: 'LineString',
+            //             coordinates: line
+            //         },
+            //         properties: {
+            //             color: '#ff0000' // Default color for lines
+            //         }
+            //     };
+            // });
+
+            // map.getSource('nLines').setData({
+            //     type: 'FeatureCollection',
+            //     features: norm
+            // })
+
+
+
 
             console.log('flattenedPairs', flattenedPairs);
             appData.points = flattenedPairs.map(pair => {
@@ -327,6 +399,31 @@
             traverse(arr);
             return result;
         }
+
+        function normalizeLines(multilineArray) {
+            return multilineArray.map(line => {
+                const result = [];
+
+                function processItem(item) {
+                    if (Array.isArray(item)) {
+                        // Check if it's a coordinate pair
+                        if (item.length === 2 &&
+                            typeof item[0] === 'number' &&
+                            typeof item[1] === 'number') {
+                            result.push(item);
+                        } else {
+                            // Process each element recursively
+                            item.forEach(processItem);
+                        }
+                    }
+                }
+
+                processItem(line);
+                return result;
+            });
+        }
+
+
 
 
     </script>
