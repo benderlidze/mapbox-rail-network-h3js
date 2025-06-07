@@ -405,6 +405,8 @@
                     nodeFeatures.push(turf.point(nodeCoord, { nodeId: nodeId }));
                 }
 
+                console.log('nodeFeatures', nodeFeatures);
+                
                 const nodeCollection = turf.featureCollection(nodeFeatures);
                 const nearest = turf.nearestPoint(targetPoint, nodeCollection);
 
