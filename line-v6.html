@@ -45,6 +45,8 @@
             points: [],
             curZoom: 7,
             routePath: null, // Store the complete route path
+            snappedStart: null, // Store snapped start point
+            snappedEnd: null    // Store snapped end point
         };
 
         const generateImagesButton = document.getElementById('generate');
@@ -198,9 +200,7 @@
                     'line-color': '#ff0000',
                     'line-width': 5
                 }
-            });
-
-            // Add source for route markers
+            });            // Add source for route markers
             map.addSource('route-markers', {
                 type: 'geojson',
                 data: {
@@ -219,6 +219,29 @@
                     'circle-color': '#00ff00',
                     'circle-opacity': 0.8,
                     'circle-stroke-width': 2,
+                    'circle-stroke-color': '#ffffff'
+                }
+            });
+
+            // Add source for snapped points
+            map.addSource('snapped-points', {
+                type: 'geojson',
+                data: {
+                    type: 'FeatureCollection',
+                    features: []
+                }
+            });
+
+            // Add layer for snapped points (larger circles with distinct colors)
+            map.addLayer({
+                'id': 'snapped-points-layer',
+                'type': 'circle',
+                'source': 'snapped-points',
+                'paint': {
+                    'circle-radius': 8,
+                    'circle-color': ['get', 'color'],
+                    'circle-opacity': 0.9,
+                    'circle-stroke-width': 3,
                     'circle-stroke-color': '#ffffff'
                 }
             });
@@ -277,6 +300,15 @@
                         type: 'FeatureCollection',
                         features: []
                     });
+                    map.getSource('snapped-points').setData({
+                        type: 'FeatureCollection',
+                        features: []
+                    });
+
+                    // Clear stored snapped points
+                    appData.snappedStart = null;
+                    appData.snappedEnd = null;
+                    appData.routePath = null;
 
                 } else if (clickCount === 2) {
                     // Second click - set end marker and find path
@@ -333,11 +365,18 @@
 
                 console.log('graph', graph);                // Find closest nodes to start and end points using Turf
                 const startNode = findClosestNodeWithTurf(graph, startPoint);
-                const endNode = findClosestNodeWithTurf(graph, endPoint);
-
-                // Also try to snap to nearest point on any rail line for better accuracy
+                const endNode = findClosestNodeWithTurf(graph, endPoint);                // Also try to snap to nearest point on any rail line for better accuracy
                 const snappedStart = snapToNearestRail(features, startPoint);
                 const snappedEnd = snapToNearestRail(features, endPoint);
+
+                // Store snapped points in appData
+                appData.snappedStart = snappedStart;
+                appData.snappedEnd = snappedEnd;
+
+                // Update the display of snapped points
+                updateSnappedPointsDisplay();
+
+
 
                 console.log('startNode', startNode);
                 console.log('endNode', endNode);
@@ -406,7 +445,7 @@
                 }
 
                 console.log('nodeFeatures', nodeFeatures);
-                
+
                 const nodeCollection = turf.featureCollection(nodeFeatures);
                 const nearest = turf.nearestPoint(targetPoint, nodeCollection);
 
@@ -507,6 +546,39 @@
                 });
 
                 return nearestPoint;
+            }
+
+            function updateSnappedPointsDisplay() {
+                const features = [];
+                
+                // Add snapped start point if it exists
+                if (appData.snappedStart) {
+                    features.push({
+                        type: 'Feature',
+                        geometry: appData.snappedStart.geometry,
+                        properties: {
+                            color: '#00ff00', // Green for start
+                            type: 'start'
+                        }
+                    });
+                }
+                
+                // Add snapped end point if it exists
+                if (appData.snappedEnd) {
+                    features.push({
+                        type: 'Feature',
+                        geometry: appData.snappedEnd.geometry,
+                        properties: {
+                            color: '#ff0000', // Red for end
+                            type: 'end'
+                        }
+                    });
+                }
+
+                map.getSource('snapped-points').setData({
+                    type: 'FeatureCollection',
+                    features: features
+                });
             }
 
             // Add markers along route at specified intervals
