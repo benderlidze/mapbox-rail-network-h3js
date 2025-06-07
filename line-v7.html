@@ -45,8 +45,8 @@
 
 
         const appData = {
-            startPoint: null, // Store the start point
-            endPoint: null,   // Store the end point
+            startPoint: null,
+            endPoint: null,
             allSnappedPoints: [], // Store snapped points
 
             points: [],
@@ -166,6 +166,41 @@
 
         map.on('load', () => {
 
+            map.addSource('snaped-start', {
+                type: 'geojson',
+                data: {
+                    type: 'FeatureCollection',
+                    features: []
+                }
+            });
+            map.addLayer({
+                'id': 'snapped-start-layer',
+                'type': 'circle',
+                'source': 'snaped-start',
+                'paint': {
+                    'circle-radius': 6,
+                    'circle-color': '#00ff00',
+                    'circle-opacity': 1
+                }
+            });
+            map.addSource('snapped-end', {
+                type: 'geojson',
+                data: {
+                    type: 'FeatureCollection',
+                    features: []
+                }
+            });
+            map.addLayer({
+                'id': 'snapped-end-layer',
+                'type': 'circle',
+                'source': 'snapped-end',
+                'paint': {
+                    'circle-radius': 6,
+                    'circle-color': '#ff0000',
+                    'circle-opacity': 1
+                }
+            });
+
             // Add source for highlighted rail segments
             map.addSource('highlighted-rail', {
                 type: 'geojson',
@@ -241,14 +276,55 @@
         });
 
 
+        let firstMarker = true
+        appData.startPoint = new mapboxgl.Marker({ color: 'green', draggable: true })
+            .setLngLat([0, 0])
+            .on('dragend', () => {
+                const lngLat = appData.startPoint.getLngLat();
+                appData.snappedStart = turf.nearestPointOnLine(appData.routePath, turf.point([lngLat.lng, lngLat.lat]));
+                console.log('Snapped start point:', appData.snappedStart);
+                map.getSource('snaped-start').setData({
+                    type: 'FeatureCollection',
+                    features: [appData.snappedStart]
+                });
+
+                rebuild();
+            })
+            .addTo(map);
+
+        appData.endPoint = new mapboxgl.Marker({ color: 'red', draggable: true })
+            .setLngLat([0, 0])
+            .on('dragend', () => {
+                const lngLat = appData.endPoint.getLngLat();
+                appData.snappedEnd = turf.nearestPointOnLine(appData.routePath, turf.point([lngLat.lng, lngLat.lat]));
+                console.log('Snapped end point:', appData.snappedEnd);
+
+                map.getSource('snapped-end').setData({
+                    type: 'FeatureCollection',
+                    features: [appData.snappedEnd]
+                });
+                rebuild();
+            })
+            .addTo(map);
+
+
+
         map.on('click', (e) => {
 
+            if (firstMarker) {
+                firstMarker = false;
+                appData.startPoint.setLngLat(e.lngLat);
+            } else {
+                appData.endPoint.setLngLat(e.lngLat);
+            }
 
-            const [startPoint, endPoint] = getStartStop(e);
+            rebuild()
+        });
 
-            console.log('startPoint', startPoint);
-            console.log('endPoint', endPoint);
+        function rebuild() {
 
+            const startPoint = appData.startPoint.getLngLat();
+            const endPoint = appData.endPoint.getLngLat();
 
             const geometry = extractGeometry()
 
@@ -267,51 +343,39 @@
 
             const turfFlattened = turf.flatten(turf.featureCollection(colored));
 
+            // Find shortest path if we have both start and end points
+            let shortestPath = null;
+            if (startPoint && endPoint) {
+                shortestPath = findShortestPath(turfFlattened.features, [startPoint.lng, startPoint.lat], [endPoint.lng, endPoint.lat]);
+                console.log('Shortest path found:', shortestPath);
+
+                if (shortestPath) {
+                    // Update appData.points with the shortest path coordinates
+                    appData.points = shortestPath.map((coord, index) => ({
+                        type: 'Feature',
+                        geometry: {
+                            type: 'Point',
+                            coordinates: coord
+                        },
+                        properties: {
+                            distance: index // Simple index-based distance for now
+                        }
+                    }));
+
+                    // Store the route path for image generation
+                    appData.routePath = {
+                        type: 'Feature',
+                        geometry: {
+                            type: 'LineString',
+                            coordinates: shortestPath
+                        }
+                    };
+                }
+            }
+
             map.getSource('nLines').setData({
                 type: 'FeatureCollection',
-                features: turfFlattened.features
-            });
-
-
-
-            const flat = geometry.map(item => item.geometry.coordinates)
-            console.log('flat', flat);
-
-            const flattenedPairs = getAllArray2Elements(flat);
-
-            const normalized = normalizeLines(flat);
-            console.log('normalized!!!!!!!!!!', normalized);
-
-            // const norm = normalized.map(line => {
-            //     return {
-            //         type: 'Feature',
-            //         geometry: {
-            //             type: 'LineString',
-            //             coordinates: line
-            //         },
-            //         properties: {
-            //             color: '#ff0000' // Default color for lines
-            //         }
-            //     };
-            // });
-
-            // map.getSource('nLines').setData({
-            //     type: 'FeatureCollection',
-            //     features: norm
-            // })
-
-
-
-
-            console.log('flattenedPairs', flattenedPairs);
-            appData.points = flattenedPairs.map(pair => {
-                return {
-                    type: 'Feature',
-                    geometry: {
-                        type: 'Point',
-                        coordinates: pair
-                    },
-                };
+                features: shortestPath ? createShortestPathFeatures(shortestPath) : turfFlattened.features
             });
 
             map.getSource('circles').setData({
@@ -323,31 +387,9 @@
                 type: 'FeatureCollection',
                 features: geometry
             });
-
-        });
-
-        function getStartStop(event) {
-            const coordinates = event.lngLat;
-            appData.allSnappedPoints.push(coordinates);
-            const length = appData.allSnappedPoints.length;
-
-            console.log('length', length);
-
-            appData.startPoint && appData.startPoint.remove();
-            appData.endPoint && appData.endPoint.remove();
-
-            appData.startPoint = new mapboxgl.Marker({ color: 'green' })
-                .setLngLat(appData.allSnappedPoints[length - 1])
-                .addTo(map);
-
-            if (appData.allSnappedPoints[length - 2]) {
-                appData.endPoint = new mapboxgl.Marker({ color: 'red' })
-                    .setLngLat(appData.allSnappedPoints[length - 2])
-                    .addTo(map);
-            }
-
-            return [appData.startPoint.getLngLat(), appData.endPoint?.getLngLat() || null];
         }
+
+
 
 
         function extractGeometry() {
@@ -398,9 +440,7 @@
 
             traverse(arr);
             return result;
-        }
-
-        function normalizeLines(multilineArray) {
+        } function normalizeLines(multilineArray) {
             return multilineArray.map(line => {
                 const result = [];
 
@@ -423,7 +463,199 @@
             });
         }
 
+        // Function to build a graph from railway line features
+        function buildGraph(features) {
+            const graph = new Map();
+            const tolerance = 0.001; // Tolerance for coordinate matching (about 100m)
 
+            // Helper function to create a key for a coordinate
+            function coordKey(coord) {
+                return `${coord[0].toFixed(6)},${coord[1].toFixed(6)}`;
+            }
+
+            // Helper function to find nearby nodes within tolerance
+            function findNearbyNodes(coord, allNodes) {
+                const nearby = [];
+                for (const [key, nodeCoord] of allNodes) {
+                    const distance = turf.distance(coord, nodeCoord, { units: 'kilometers' });
+                    if (distance < tolerance * 111) { // Convert degrees to km roughly
+                        nearby.push(key);
+                    }
+                }
+                return nearby;
+            }
+
+            const allNodes = new Map();
+
+            // First pass: collect all unique nodes
+            features.forEach(feature => {
+                if (feature.geometry && feature.geometry.type === 'LineString') {
+                    const coords = feature.geometry.coordinates;
+                    coords.forEach(coord => {
+                        const key = coordKey(coord);
+                        if (!allNodes.has(key)) {
+                            allNodes.set(key, coord);
+                        }
+                    });
+                }
+            });
+
+            // Second pass: build the graph with connections
+            features.forEach(feature => {
+                if (feature.geometry && feature.geometry.type === 'LineString') {
+                    const coords = feature.geometry.coordinates;
+
+                    for (let i = 0; i < coords.length - 1; i++) {
+                        const currentKey = coordKey(coords[i]);
+                        const nextKey = coordKey(coords[i + 1]);
+
+                        if (!graph.has(currentKey)) {
+                            graph.set(currentKey, []);
+                        }
+                        if (!graph.has(nextKey)) {
+                            graph.set(nextKey, []);
+                        }
+
+                        const distance = turf.distance(coords[i], coords[i + 1], { units: 'kilometers' });
+
+                        // Add bidirectional edges
+                        graph.get(currentKey).push({ node: nextKey, distance, coord: coords[i + 1] });
+                        graph.get(nextKey).push({ node: currentKey, distance, coord: coords[i] });
+                    }
+                }
+            });
+
+            return { graph, allNodes };
+        }
+
+        // Dijkstra's algorithm for shortest path
+        function dijkstra(graph, allNodes, startCoord, endCoord) {
+            const tolerance = 0.001;
+
+            // Find closest nodes to start and end points
+            let startNode = null;
+            let endNode = null;
+            let minStartDist = Infinity;
+            let minEndDist = Infinity;
+
+            for (const [key, coord] of allNodes) {
+                const startDist = turf.distance(startCoord, coord, { units: 'kilometers' });
+                const endDist = turf.distance(endCoord, coord, { units: 'kilometers' });
+
+                if (startDist < minStartDist) {
+                    minStartDist = startDist;
+                    startNode = key;
+                }
+
+                if (endDist < minEndDist) {
+                    minEndDist = endDist;
+                    endNode = key;
+                }
+            }
+
+            if (!startNode || !endNode) {
+                console.log('Could not find start or end nodes');
+                return null;
+            }
+
+            console.log(`Start node: ${startNode}, End node: ${endNode}`);
+
+            const distances = new Map();
+            const previous = new Map();
+            const unvisited = new Set();
+
+            // Initialize distances
+            for (const node of graph.keys()) {
+                distances.set(node, Infinity);
+                unvisited.add(node);
+            }
+            distances.set(startNode, 0);
+
+            while (unvisited.size > 0) {
+                // Find unvisited node with minimum distance
+                let currentNode = null;
+                let minDistance = Infinity;
+
+                for (const node of unvisited) {
+                    if (distances.get(node) < minDistance) {
+                        minDistance = distances.get(node);
+                        currentNode = node;
+                    }
+                }
+
+                if (currentNode === null || minDistance === Infinity) {
+                    break;
+                }
+
+                unvisited.delete(currentNode);
+
+                if (currentNode === endNode) {
+                    break;
+                }
+
+                // Check neighbors
+                const neighbors = graph.get(currentNode) || [];
+                for (const neighbor of neighbors) {
+                    if (unvisited.has(neighbor.node)) {
+                        const altDistance = distances.get(currentNode) + neighbor.distance;
+                        if (altDistance < distances.get(neighbor.node)) {
+                            distances.set(neighbor.node, altDistance);
+                            previous.set(neighbor.node, currentNode);
+                        }
+                    }
+                }
+            }
+
+            // Reconstruct path
+            const path = [];
+            let currentNode = endNode;
+
+            while (currentNode !== undefined) {
+                path.unshift(allNodes.get(currentNode));
+                currentNode = previous.get(currentNode);
+            }
+
+            if (path.length === 0 || path[0] === undefined) {
+                console.log('No path found');
+                return null;
+            }
+
+            return path;
+        }
+
+        // Main function to find shortest path
+        function findShortestPath(features, startCoord, endCoord) {
+            console.log('Building graph from', features.length, 'features');
+            const { graph, allNodes } = buildGraph(features);
+            console.log('Graph built with', graph.size, 'nodes');
+
+            const path = dijkstra(graph, allNodes, startCoord, endCoord);
+            return path;
+        }
+
+        // Function to create features for the shortest path
+        function createShortestPathFeatures(pathCoordinates) {
+            if (!pathCoordinates || pathCoordinates.length < 2) {
+                return [];
+            }
+
+            const features = [];
+            for (let i = 0; i < pathCoordinates.length - 1; i++) {
+                features.push({
+                    type: 'Feature',
+                    geometry: {
+                        type: 'LineString',
+                        coordinates: [pathCoordinates[i], pathCoordinates[i + 1]]
+                    },
+                    properties: {
+                        color: '#00ff00', // Green for shortest path
+                        isShortestPath: true
+                    }
+                });
+            }
+
+            return features;
+        }
 
 
     </script>
