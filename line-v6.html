@@ -157,26 +157,26 @@
 
         map.on('load', () => {
 
-            map.addSource('rail', {
-                type: 'vector',
-                url: 'mapbox://devoerailstate.cvm6ll9k'
-            });
-            map.addLayer(
-                {
-                    'id': 'rail-data',
-                    'type': 'line',
-                    'source': 'rail',
-                    'source-layer': 'North_American_Rail_Network_Lines',
-                    'layout': {
-                        'line-join': 'round',
-                        'line-cap': 'round'
-                    },
-                    'paint': {
-                        'line-color': 'red',
-                        'line-width': 1
-                    }
-                },
-            );
+            // map.addSource('rail', {
+            //     type: 'vector',
+            //     url: 'mapbox://devoerailstate.cvm6ll9k'
+            // });
+            // map.addLayer(
+            //     {
+            //         'id': 'rail-data',
+            //         'type': 'line',
+            //         'source': 'rail',
+            //         'source-layer': 'North_American_Rail_Network_Lines',
+            //         'layout': {
+            //             'line-join': 'round',
+            //             'line-cap': 'round'
+            //         },
+            //         'paint': {
+            //             'line-color': 'white',
+            //             'line-width': 2
+            //         }
+            //     },
+            // );
 
             // Add source for highlighted rail segments
             map.addSource('highlighted-rail', {
@@ -297,13 +297,34 @@
                 const startPoint = turf.point([start.lng, start.lat]);
                 const endPoint = turf.point([end.lng, end.lat]);
 
-                // Query all rail features in the current view
-                const bbox = map.getBounds();
-                const features = map.queryRenderedFeatures(
-                    { bbox, layerId: 'rail-data' }
-                );
+                const railwayLayerIds = [
+                    "norfolk-southern-railway-8n11jq",
+                    "bnsf-railway-7b7w8j",
+                    "canadian-pacific-railway-4h4e7n",
+                    "union-pacific-railroad-819skb",
+                    "kansas-city-southern-railway-1969kc",
+                    "csx-transportation-bwyxgb",
+                    "canadian-national-railway-7c632m"
+                ];
 
+                // Get pixel bounding box of the map view
+                const bounds = map.getBounds();
+                const sw = map.project(bounds.getSouthWest());
+                const ne = map.project(bounds.getNorthEast());
 
+                const bbox = [
+                    [sw.x, ne.y], // top-left
+                    [ne.x, sw.y]  // bottom-right
+                ];
+
+                const features = map.queryRenderedFeatures(bbox, {
+                    layers: railwayLayerIds
+                });
+
+                console.log(`{
+                    "type": "FeatureCollection",
+                    "features": ${JSON.stringify(features)}
+                    }`);
 
                 if (features.length === 0) return;
 
@@ -457,7 +478,7 @@
 
             // Helper functions
             function coordToString(coord) {
-                return `${coord[0].toFixed(6)},${coord[1].toFixed(6)}`;
+                return `${coord[0].toFixed(6)}, ${coord[1].toFixed(6)}`;
             }
 
             // Legacy distance function using simple Euclidean distance
@@ -515,7 +536,7 @@
                     features: markers
                 });
 
-                console.log(`Added ${markers} markers along route (${totalLength.toFixed(2)} km total)`);
+                console.log(`Added ${markers} markers along route(${totalLength.toFixed(2)} km total)`);
 
                 return markers;
             }
