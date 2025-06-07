@@ -301,11 +301,11 @@
         map.on('click', (e) => {
 
             if (firstMarker) {
-                firstMarker = false;
                 appData.startPoint.setLngLat(e.lngLat);
             } else {
                 appData.endPoint.setLngLat(e.lngLat);
             }
+            firstMarker = !firstMarker;
 
             rebuild()
         });
@@ -364,7 +364,6 @@
                     };
                 })
             });
-
 
 
         }
