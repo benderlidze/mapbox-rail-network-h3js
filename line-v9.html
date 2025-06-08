@@ -462,18 +462,18 @@
             });
 
 
-            map.getSource('highlighted-rail').setData({
-                ...turfFlattened,
-                features: turfFlattened.features.map(feature => {
-                    return {
-                        ...feature,
-                        properties: {
-                            ...feature.properties,
-                            color: `#${Math.floor(Math.random() * 16777215).toString(16)}` // Random color for each segment
-                        }
-                    };
-                })
-            });
+            // map.getSource('highlighted-rail').setData({
+            //     ...turfFlattened,
+            //     features: turfFlattened.features.map(feature => {
+            //         return {
+            //             ...feature,
+            //             properties: {
+            //                 ...feature.properties,
+            //                 color: `#${Math.floor(Math.random() * 16777215).toString(16)}` // Random color for each segment
+            //             }
+            //         };
+            //     })
+            // });
 
 
             // Find and display shortest path
@@ -488,9 +488,6 @@
                 }
             }
         }
-
-
-
 
         function extractGeometry() {
             const railwayLayerIds = [

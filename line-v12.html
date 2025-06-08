@@ -10,6 +10,7 @@
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <script src="h3-js.js"></script>
     <script src="https://unpkg.com/@turf/turf@7/turf.min.js"></script>
+    <script src="geo-tools.js"></script>
 
     <style>
         body {
@@ -240,6 +241,16 @@
                     'line-opacity': 0.5
                 }
             });
+            map.addLayer({
+                'id': 'nLines-circle-layer',
+                'type': 'circle',
+                'source': 'nLines',
+                'paint': {
+                    'circle-radius': 4,
+                    'circle-color': '#0000ff',
+                    'circle-opacity': 0.5
+                }
+            });
 
 
 
@@ -307,89 +318,13 @@
             }
             firstMarker = !firstMarker;
 
+            console.log('firstpoint ', appData.startPoint.getLngLat().toArray());
+            console.log('secondpoint ', appData.endPoint.getLngLat().toArray());
+
             rebuild()
         });
 
-        function buildGraphFromLines(lineFeatures) {
-            // Build a graph: nodes are coordinates, edges are line segments with distances
-            const graph = {};
-            function coordKey(coord) {
-                return coord.join(",");
-            }
-            for (const feature of lineFeatures) {
-                const coords = feature.geometry.coordinates;
-                for (let i = 0; i < coords.length - 1; i++) {
-                    const a = coords[i];
-                    const b = coords[i + 1];
-                    const keyA = coordKey(a);
-                    const keyB = coordKey(b);
-                    const dist = turf.distance(turf.point(a), turf.point(b));
-                    if (!graph[keyA]) graph[keyA] = [];
-                    if (!graph[keyB]) graph[keyB] = [];
-                    graph[keyA].push({ node: keyB, coord: b, weight: dist });
-                    graph[keyB].push({ node: keyA, coord: a, weight: dist });
-                }
-            }
-            return graph;
-        }
 
-        function findClosestNode(graph, point) {
-            // Find the closest node in the graph to the given point
-            let minDist = Infinity;
-            let closestKey = null;
-            const pt = point.geometry.coordinates;
-            for (const key in graph) {
-                const nodeCoord = key.split(",").map(Number);
-                const d = turf.distance(turf.point(pt), turf.point(nodeCoord));
-                if (d < minDist) {
-                    minDist = d;
-                    closestKey = key;
-                }
-            }
-            return closestKey;
-        }
-
-        function dijkstra(graph, startKey, endKey) {
-            // Simple Dijkstra's algorithm
-            const distances = {};
-            const prev = {};
-            const queue = new Set(Object.keys(graph));
-            for (const node of queue) {
-                distances[node] = Infinity;
-            }
-            distances[startKey] = 0;
-            while (queue.size > 0) {
-                let u = null;
-                let minDist = Infinity;
-                for (const node of queue) {
-                    if (distances[node] < minDist) {
-                        minDist = distances[node];
-                        u = node;
-                    }
-                }
-                if (u === endKey || u === null) break;
-                queue.delete(u);
-                for (const neighbor of graph[u]) {
-                    const alt = distances[u] + neighbor.weight;
-                    if (alt < distances[neighbor.node]) {
-                        distances[neighbor.node] = alt;
-                        prev[neighbor.node] = u;
-                    }
-                }
-            }
-            // Reconstruct path
-            const path = [];
-            let u = endKey;
-            while (u) {
-                path.unshift(u);
-                u = prev[u];
-            }
-            return path;
-        }
-
-        function getCoordsFromPath(path) {
-            return path.map(key => key.split(",").map(Number));
-        }
 
         function displayShortestPath(coords) {
             const feature = {
@@ -434,20 +369,46 @@
                     type: 'Feature',
                     geometry: item.geometry,
                     properties: {
-                        color: 'blue', // Default color for lines
+                        color: `#${Math.floor(Math.random() * 16777215).toString(16)}`
                     }
                 };
             });
             console.log('colored', colored);
+
+            map.getSource('nLines').setData({
+                type: 'FeatureCollection',
+                features: colored
+            });
 
             const turfFlattened = turf.flatten(turf.featureCollection(colored));
 
             console.log('turfFlattened', turfFlattened);
 
 
+
+
+
+
+            const railroadData = turfFlattened
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
             const lngLatStart = appData.startPoint.getLngLat();
             appData.snappedStart = turf.nearestPointOnLine(turfFlattened, turf.point([lngLatStart.lng, lngLatStart.lat]));
-            console.log('Snapped start point:', appData.snappedStart);
+            console.log('Snapped start point:', appData.snappedStart, appData.snappedStart.geometry.coordinates);
             map.getSource('snaped-start').setData({
                 type: 'FeatureCollection',
                 features: [appData.snappedStart]
@@ -455,29 +416,37 @@
 
             const lngLatEnd = appData.endPoint.getLngLat();
             appData.snappedEnd = turf.nearestPointOnLine(turfFlattened, turf.point([lngLatEnd.lng, lngLatEnd.lat]));
-            console.log('Snapped end point:', appData.snappedEnd);
+            console.log('Snapped end point:', appData.snappedEnd, appData.snappedEnd.geometry.coordinates);
             map.getSource('snapped-end').setData({
                 type: 'FeatureCollection',
                 features: [appData.snappedEnd]
             });
 
 
-            map.getSource('highlighted-rail').setData({
-                ...turfFlattened,
-                features: turfFlattened.features.map(feature => {
-                    return {
-                        ...feature,
-                        properties: {
-                            ...feature.properties,
-                            color: `#${Math.floor(Math.random() * 16777215).toString(16)}` // Random color for each segment
-                        }
-                    };
-                })
-            });
+            // map.getSource('highlighted-rail').setData({
+            //     ...turfFlattened,
+            //     features: turfFlattened.features.map(feature => {
+            //         return {
+            //             ...feature,
+            //             properties: {
+            //                 ...feature.properties,
+            //                 color: `#${Math.floor(Math.random() * 16777215).toString(16)}` // Random color for each segment
+            //             }
+            //         };
+            //     })
+            // });            // Find and display shortest path with 5 meter tolerance
 
 
-            // Find and display shortest path
-            const graph = buildGraphFromLines(turfFlattened.features);
+            //clear
+            if (map.getLayer('shortest-path-layer')) {
+                map.removeLayer('shortest-path-layer');
+            }
+            if (map.getSource('shortest-path')) {
+                map.removeSource('shortest-path');
+            }
+
+
+            const graph = buildGraphFromLines(turfFlattened.features, 5);
             const startKey = findClosestNode(graph, appData.snappedStart);
             const endKey = findClosestNode(graph, appData.snappedEnd);
             if (startKey && endKey) {
@@ -488,9 +457,6 @@
                 }
             }
         }
-
-
-
 
         function extractGeometry() {
             const railwayLayerIds = [
@@ -517,10 +483,32 @@
                 layers: railwayLayerIds
             });
 
+            // // Also query source features to get all features regardless of visibility
+            // const railwaySourceLayers = [
+            //     "BNSF_Railway-7b7w8j",
+            //     "Canadian_Pacific_Railway-4h4e7n",
+            //     "Union_Pacific_Railroad-819skb",
+            //     "Kansas_City_Southern_Railway-1969kc",
+            //     "CSX_Transportation-bwyxgb",
+            //     "Canadian_National_Railway-7c632m",
+            //     "Norfolk_Southern_Railway-8n11jq"
+            // ];
+
+            // let allFeatures = [];
+
+            // railwaySourceLayers.forEach((sourceLayer) => {
+            //     const features = map.querySourceFeatures("composite", {
+            //         sourceLayer: sourceLayer
+            //     });
+
+            //     allFeatures = allFeatures.concat(features);
+            // });
+
+            // console.log('queried features', features);
+            // console.log('allFeatures', allFeatures);
+
             return features
         }
-
-
 
 
 

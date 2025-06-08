@@ -445,6 +445,44 @@
             console.log('turfFlattened', turfFlattened);
 
 
+
+
+
+
+            const railroadData = turfFlattened
+
+            // Create pathfinder
+            const pathfinder = new RailroadPathfinder(railroadData, 2.2); // 10m tolerance
+
+            // Define start and end points
+
+            console.log('pathfinder ', pathfinder, [startPoint.lng, startPoint.lat], [endPoint.lng, endPoint.lat]);
+
+            try {
+                // Find and create highlighted path
+                const highlightedPath = pathfinder.createHighlightedPath([startPoint.lng, startPoint.lat], [endPoint.lng, endPoint.lat]);
+
+                console.log('Path found!');
+                console.log('Used features:', highlightedPath.features[0].properties.usedFeatures);
+                console.log('Total length:', highlightedPath.features[0].properties.totalLength, 'km');
+
+                // You can now display this highlighted path on your map
+                // It will be a single continuous line from start to end
+
+            } catch (error) {
+                console.error('Could not find path:', error.message);
+            }
+
+
+
+
+
+
+
+
+
+
+
             const lngLatStart = appData.startPoint.getLngLat();
             appData.snappedStart = turf.nearestPointOnLine(turfFlattened, turf.point([lngLatStart.lng, lngLatStart.lat]));
             console.log('Snapped start point:', appData.snappedStart);
@@ -462,18 +500,18 @@
             });
 
 
-            map.getSource('highlighted-rail').setData({
-                ...turfFlattened,
-                features: turfFlattened.features.map(feature => {
-                    return {
-                        ...feature,
-                        properties: {
-                            ...feature.properties,
-                            color: `#${Math.floor(Math.random() * 16777215).toString(16)}` // Random color for each segment
-                        }
-                    };
-                })
-            });
+            // map.getSource('highlighted-rail').setData({
+            //     ...turfFlattened,
+            //     features: turfFlattened.features.map(feature => {
+            //         return {
+            //             ...feature,
+            //             properties: {
+            //                 ...feature.properties,
+            //                 color: `#${Math.floor(Math.random() * 16777215).toString(16)}` // Random color for each segment
+            //             }
+            //         };
+            //     })
+            // });
 
 
             // Find and display shortest path
@@ -488,9 +526,6 @@
                 }
             }
         }
-
-
-
 
         function extractGeometry() {
             const railwayLayerIds = [
@@ -524,9 +559,288 @@
 
 
 
+        class RailroadPathfinder {
+            constructor(featureCollection, tolerance = 0.01) {
+                this.features = featureCollection.features;
+                this.tolerance = tolerance; // km
+                this.graph = this.buildGraph();
+            }
+
+            buildGraph() {
+                const nodes = new Map(); // coordinate -> node info
+                const edges = []; // connections between nodes
+
+                // Extract all endpoints and create nodes
+                this.features.forEach((feature, featureIndex) => {
+                    const coords = feature.geometry.coordinates;
+                    const start = coords[0];
+                    const end = coords[coords.length - 1];
+
+                    [start, end].forEach(coord => {
+                        const key = this.coordToKey(coord);
+                        if (!nodes.has(key)) {
+                            nodes.set(key, {
+                                coord: coord,
+                                connections: [],
+                                features: []
+                            });
+                        }
+                        nodes.get(key).features.push(featureIndex);
+                    });
+
+                    // Add edge for this feature
+                    edges.push({
+                        start: this.coordToKey(start),
+                        end: this.coordToKey(end),
+                        feature: featureIndex,
+                        length: turf.length(feature),
+                        coords: coords
+                    });
+                });
+
+                // Connect nearby nodes (parallel tracks)
+                const nodeArray = Array.from(nodes.entries());
+                for (let i = 0; i < nodeArray.length; i++) {
+                    for (let j = i + 1; j < nodeArray.length; j++) {
+                        const [key1, node1] = nodeArray[i];
+                        const [key2, node2] = nodeArray[j];
+
+                        const distance = turf.distance(node1.coord, node2.coord);
+                        if (distance <= this.tolerance) {
+                            node1.connections.push(key2);
+                            node2.connections.push(key1);
+                        }
+                    }
+                }
+
+                return { nodes, edges };
+            }
+
+            findPath(startPoint, endPoint) {
+                // Find closest nodes to start and end points
+                const startNode = this.findClosestNode(startPoint);
+                const endNode = this.findClosestNode(endPoint);
+
+                if (!startNode || !endNode) {
+                    throw new Error('Could not find valid start or end nodes');
+                }
+
+                // Use A* or Dijkstra to find path
+                return this.dijkstraPath(startNode, endNode);
+            }
+
+            dijkstraPath(startKey, endKey) {
+                const distances = new Map();
+                const previous = new Map();
+                const unvisited = new Set();
+
+                // Initialize
+                this.graph.nodes.forEach((node, key) => {
+                    distances.set(key, key === startKey ? 0 : Infinity);
+                    unvisited.add(key);
+                });
+
+                while (unvisited.size > 0) {
+                    // Find unvisited node with minimum distance
+                    let current = null;
+                    let minDistance = Infinity;
+
+                    for (const key of unvisited) {
+                        if (distances.get(key) < minDistance) {
+                            minDistance = distances.get(key);
+                            current = key;
+                        }
+                    }
+
+                    if (current === endKey) break;
+                    if (minDistance === Infinity) break;
+
+                    unvisited.delete(current);
+
+                    // Check neighbors
+                    const currentNode = this.graph.nodes.get(current);
+
+                    // Direct feature connections
+                    this.graph.edges.forEach(edge => {
+                        if (edge.start === current || edge.end === current) {
+                            const neighbor = edge.start === current ? edge.end : edge.start;
+                            if (unvisited.has(neighbor)) {
+                                const newDist = distances.get(current) + edge.length;
+                                if (newDist < distances.get(neighbor)) {
+                                    distances.set(neighbor, newDist);
+                                    previous.set(neighbor, { node: current, edge: edge });
+                                }
+                            }
+                        }
+                    });
+
+                    // Parallel track connections
+                    currentNode.connections.forEach(neighborKey => {
+                        if (unvisited.has(neighborKey)) {
+                            const newDist = distances.get(current) + 0.001; // Small cost for switching tracks
+                            if (newDist < distances.get(neighborKey)) {
+                                distances.set(neighborKey, newDist);
+                                previous.set(neighborKey, { node: current, edge: null });
+                            }
+                        }
+                    });
+                }
+
+                // Reconstruct path
+                return this.reconstructPath(previous, startKey, endKey);
+            }
+
+            reconstructPath(previous, startKey, endKey) {
+                const path = [];
+                const usedFeatures = new Set();
+                let current = endKey;
+
+                while (current && current !== startKey) {
+                    const prev = previous.get(current);
+                    if (!prev) break;
+
+                    if (prev.edge) {
+                        path.unshift(prev.edge);
+                        usedFeatures.add(prev.edge.feature);
+                    }
+                    current = prev.node;
+                }
+
+                return {
+                    path: path,
+                    features: Array.from(usedFeatures),
+                    coordinates: this.pathToCoordinates(path)
+                };
+            }
+
+            pathToCoordinates(path) {
+                const coords = [];
+                let lastCoord = null;
+
+                path.forEach(edge => {
+                    const edgeCoords = [...edge.coords];
+
+                    // Ensure proper direction
+                    if (lastCoord) {
+                        const startDist = turf.distance(lastCoord, edgeCoords[0]);
+                        const endDist = turf.distance(lastCoord, edgeCoords[edgeCoords.length - 1]);
+
+                        if (endDist < startDist) {
+                            edgeCoords.reverse();
+                        }
+                    }
+
+                    // Add coordinates (skip first if it matches last)
+                    const startIdx = (lastCoord && this.coordsEqual(lastCoord, edgeCoords[0])) ? 1 : 0;
+                    coords.push(...edgeCoords.slice(startIdx));
+                    lastCoord = edgeCoords[edgeCoords.length - 1];
+                });
+
+                return coords;
+            }
+
+            findClosestNode(point) {
+                let closest = null;
+                let minDistance = Infinity;
+
+                this.graph.nodes.forEach((node, key) => {
+                    const distance = turf.distance(point, node.coord);
+                    if (distance < minDistance) {
+                        minDistance = distance;
+                        closest = key;
+                    }
+                });
+
+                return closest;
+            }
+
+            coordToKey(coord) {
+                return `${coord[0].toFixed(6)},${coord[1].toFixed(6)}`;
+            }
+
+            coordsEqual(coord1, coord2) {
+                return Math.abs(coord1[0] - coord2[0]) < 0.000001 &&
+                    Math.abs(coord1[1] - coord2[1]) < 0.000001;
+            }
+
+            // Create highlighted path as new feature
+            createHighlightedPath(startPoint, endPoint) {
+                const result = this.findPath(startPoint, endPoint);
+
+                return {
+                    type: 'FeatureCollection',
+                    features: [
+                        {
+                            type: 'Feature',
+                            properties: {
+                                type: 'highlighted_path',
+                                color: 'red',
+                                width: 5,
+                                usedFeatures: result.features,
+                                totalLength: turf.length(turf.lineString(result.coordinates))
+                            },
+                            geometry: {
+                                type: 'LineString',
+                                coordinates: result.coordinates
+                            }
+                        }
+                    ]
+                };
+            }
+        }
 
 
+        function followRailroadDirection(featureCollection, startPoint, endPoint, tolerance = 0.01) {
+            const features = featureCollection.features;
+            const path = [];
+            let currentPoint = startPoint;
+            const usedFeatures = new Set();
 
+            while (turf.distance(currentPoint, endPoint) > tolerance) {
+                let bestFeature = null;
+                let bestDistance = Infinity;
+                let bestConnection = null;
+
+                // Find closest unused feature
+                features.forEach((feature, index) => {
+                    if (usedFeatures.has(index)) return;
+
+                    const coords = feature.geometry.coordinates;
+                    const startDist = turf.distance(currentPoint, coords[0]);
+                    const endDist = turf.distance(currentPoint, coords[coords.length - 1]);
+
+                    if (startDist < bestDistance) {
+                        bestDistance = startDist;
+                        bestFeature = { feature, index, coords: coords, reverse: false };
+                    }
+
+                    if (endDist < bestDistance) {
+                        bestDistance = endDist;
+                        bestFeature = { feature, index, coords: [...coords].reverse(), reverse: true };
+                    }
+                });
+
+                if (!bestFeature || bestDistance > tolerance) break;
+
+                // Add to path
+                path.push(...bestFeature.coords);
+                usedFeatures.add(bestFeature.index);
+                currentPoint = bestFeature.coords[bestFeature.coords.length - 1];
+            }
+
+            return {
+                type: 'Feature',
+                properties: {
+                    type: 'continuous_path',
+                    color: 'red',
+                    usedFeatures: Array.from(usedFeatures)
+                },
+                geometry: {
+                    type: 'LineString',
+                    coordinates: path
+                }
+            };
+        }
 
     </script>
 
