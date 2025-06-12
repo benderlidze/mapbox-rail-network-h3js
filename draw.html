@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <title>Add a vector tile source</title>
+    <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
+    <link href="https://api.mapbox.com/mapbox-gl-js/v3.10.0/mapbox-gl.css" rel="stylesheet">
+    <script src="https://api.mapbox.com/mapbox-gl-js/v3.10.0/mapbox-gl.js"></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="h3-js.js"></script>
+    <script src="https://unpkg.com/@turf/turf@7/turf.min.js"></script>
+    <script src="geo-tools.js"></script>
+
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: Arial, Helvetica, sans-serif;
+        }
+
+        #map {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 100%;
+        }
+
+        #generate {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background-color: #fff;
+            padding: 10px;
+            border-radius: 5px;
+            cursor: pointer;
+            z-index: 1;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="map"></div>
+    <div id="generate">Generate images</div>
+    <script>
+
+
+        const appData = {
+            startPoint: null,
+            endPoint: null,
+            allSnappedPoints: [], // Store snapped points
+
+            points: [],
+            curZoom: 7,
+            routePath: null, // Store the complete route path
+            snappedStart: null, // Store snapped start point
+            snappedEnd: null    // Store snapped end point
+        };
+
+        const generateImagesButton = document.getElementById('generate');
+        generateImagesButton.addEventListener('click', async () => {
+            if (appData.points.length === 0) {
+                alert('No route points available. Please select a route first.');
+                return;
+            }
+
+            // Extract coordinates from points
+            const coordinates = appData.points.map(point => ({
+                lng: point.geometry.coordinates[0],
+                lat: point.geometry.coordinates[1],
+                distance: point.properties.distance
+            }));
+
+            // Generate images for each point
+            await generateStaticImages(coordinates.splice(0, 3), {
+                width: 1024,
+                height: 1024,
+                zoom: 13,
+                style: 'satellite-v9'
+            });
+        });
+
+        // Function to generate and download static Mapbox images
+        async function generateStaticImages(coordinates, options = {}) {
+            const {
+                width = 1024,
+                height = 1024,
+                zoom = 10,
+                style = 'satellite-v9'
+            } = options;
+
+            const accessToken = mapboxgl.accessToken;
+            let downloadCount = 0;
+
+            // Create complete route overlay if we have the route path
+            let routeOverlay = '';
+            if (appData.routePath && appData.routePath.geometry.coordinates.length > 1) {
+                // Convert route coordinates to the format needed for Mapbox Static API
+                const routeCoords = appData.routePath.geometry.coordinates
+                    .map(coord => `${coord[0]},${coord[1]}`)
+                    .join(';');
+
+                // Create route overlay (red line, 5px width, 80% opacity)
+                routeOverlay = `/path-5+ff0000-0.8(${encodeURIComponent(routeCoords)})`;
+            }
+
+            for (let i = 0; i < coordinates.length; i++) {
+                const coord = coordinates[i];
+
+                try {
+                    // Create a point marker overlay for the current point
+                    const pointOverlay = `/pin-s+00ff00(${coord.lng},${coord.lat})`;
+
+                    // Combine route overlay and point overlay
+                    const allOverlays = routeOverlay + pointOverlay;
+
+                    // Create the Mapbox Static API URL with overlays
+                    const staticUrl = `https://api.mapbox.com/styles/v1/devoerailstate/cmblon9im00gl01s2dykk946u/static/${coord.lng},${coord.lat},${zoom}/${width}x${height}?access_token=pk.eyJ1IjoiZGV2b2VyYWlsc3RhdGUiLCJhIjoiY2wxNnZ1ejR0MDl2YjNicXNjd3R2dGx5ZCJ9.Y4aChG8-UtF_4FOQZF8R2Q`;
+
+
+                    console.log(`Generating image ${i + 1}/${coordinates.length}:`, staticUrl);
+
+                    // Fetch the image
+                    const response = await fetch(staticUrl);
+
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+
+                    const blob = await response.blob();
+
+                    // Create download link
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `route_point_${i + 1}_${coord.distance}km_${coord.lat.toFixed(6)}_${coord.lng.toFixed(6)}.png`;
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
+
+                    downloadCount++;
+                    console.log(`Downloaded image ${downloadCount}/${coordinates.length}: ${a.download}`);
+
+                    // Add a small delay to avoid rate limiting
+                    await new Promise(resolve => setTimeout(resolve, 500));
+
+                } catch (error) {
+                    console.error(`Error downloading image for coordinate ${i + 1}:`, error);
+                }
+            }
+
+            alert(`Download complete! ${downloadCount} images downloaded.`);
+        }
+
+
+
+        mapboxgl.accessToken = 'pk.eyJ1IjoiZGV2b2VyYWlsc3RhdGUiLCJhIjoiY2wxNnZ1ejR0MDl2YjNicXNjd3R2dGx5ZCJ9.Y4aChG8-UtF_4FOQZF8R2Q';
+        const map = new mapboxgl.Map({
+            container: 'map',
+            style: 'mapbox://styles/devoerailstate/cmblon9im00gl01s2dykk946u',
+            zoom: 10,
+            center: { lng: -103.66328150733369, lat: 37.950454275085505 },
+            projection: 'mercator',
+            cooperativeGestures: window.innerWidth < 768 ? true : false
+        });
+
+        map.on('load', () => {
+
+
+
+        });
+
+
+
+
+
+
+
+
+    </script>
+
+</body>
+
+</html>
