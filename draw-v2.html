@@ -40,16 +40,10 @@
         }
 
         #draw-line-btn {
-            position: absolute;
-            top: 60px;
-            left: 10px;
             background: #0078ff;
             color: #fff;
             border: none;
-            border-radius: 5px;
-            padding: 10px 16px;
             cursor: pointer;
-            z-index: 2;
         }
 
         #draw-line-btn:hover {
@@ -65,8 +59,11 @@
             padding: 8px 12px;
             border-radius: 5px;
             box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+
+
             display: flex;
-            align-items: center;
+            flex-direction: column;
+
             gap: 8px;
         }
 
@@ -96,13 +93,14 @@
 </head>
 
 <body>
-    <button id="draw-line-btn">Draw Line</button>
+
     <div id="map"></div>
     <div class="control-panel">
+        <button id="draw-line-btn">1. Draw Line</button>
         <label for="distance-input">Interval (meters):</label>
         <input id="distance-input" type="number" min="10" value="500">
-        <button id="generate-points-btn">Generate Points</button>
-        <button id="generate-images-btn">Generate Images</button>
+        <button id="generate-points-btn">2. Generate Points</button>
+        <button id="generate-images-btn">3. Generate Images</button>
     </div>
     <script>
 
@@ -116,19 +114,20 @@
 
         const generatePointsButton = document.getElementById('generate-points-btn');
         generatePointsButton.addEventListener('click', async () => {
-            // Split the drawn line into points every 500 meters using Turf.js
+            const intervalMeters = parseFloat(document.getElementById('distance-input').value) || 500;
             let coordinates = [];
             if (appData.routePath && appData.routePath.geometry && appData.routePath.geometry.type === 'LineString') {
                 const line = turf.lineString(appData.routePath.geometry.coordinates);
                 const lineLength = turf.length(line, { units: 'kilometers' });
-                const numPoints = Math.floor((lineLength * 1000) / 500) + 1;
+                const intervalKm = intervalMeters / 1000;
+                const numPoints = Math.floor(lineLength / intervalKm);
                 coordinates = [];
                 for (let i = 0; i <= numPoints; i++) {
-                    const segment = turf.along(line, (i * 0.5), { units: 'kilometers' });
+                    const segment = turf.along(line, i * intervalKm, { units: 'kilometers' });
                     coordinates.push({
                         lng: segment.geometry.coordinates[0],
                         lat: segment.geometry.coordinates[1],
-                        distance: (i * 0.5).toFixed(2)
+                        distance: (i * intervalKm).toFixed(2)
                     });
                 }
             } else {
@@ -157,7 +156,7 @@
         generateImagesButton.addEventListener('click', async () => {
 
             // Generate images for each point
-            await generateStaticImages(appData.points.splice(0, 3), {
+            await generateStaticImages(appData.points, {
                 width: 1024,
                 height: 1024,
                 zoom: 13,
