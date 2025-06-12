@@ -109,7 +109,12 @@
 
             points: [],
             curZoom: 7,
-            routePath: []
+            routePath: [],
+            zoomLevel: (() => {
+                const params = new URLSearchParams(window.location.search);
+                const zoom = parseInt(params.get('zoom'), 10);
+                return isNaN(zoom) ? 10 : zoom;
+            })(),
         };
 
         const generatePointsButton = document.getElementById('generate-points-btn');
@@ -170,7 +175,7 @@
             await generateStaticImages(appData.points, {
                 width: 1024,
                 height: 1024,
-                zoom: 13,
+                zoom: appData.zoomLevel,
                 style: 'satellite-v9'
             });
         });
