@@ -130,6 +130,17 @@
                         distance: (i * intervalKm).toFixed(2)
                     });
                 }
+
+                // Always add the last coordinate as a point if it's not already included
+                const lastCoord = appData.routePath.geometry.coordinates[appData.routePath.geometry.coordinates.length - 1];
+                const lastPoint = coordinates[coordinates.length - 1];
+                if (!lastPoint || lastPoint.lng !== lastCoord[0] || lastPoint.lat !== lastCoord[1]) {
+                    coordinates.push({
+                        lng: lastCoord[0],
+                        lat: lastCoord[1],
+                        distance: lineLength.toFixed(2)
+                    });
+                }
             } else {
                 alert('No route line available. Please draw a line first.');
                 return;
