@@ -1,18 +1,15 @@
 <!DOCTYPE html>
 <html>
 
-
 <head>
     <meta charset="utf-8">
     <title>Add a vector tile source</title>
     <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
 
-
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet">
     <link href="https://api.mapbox.com/mapbox-gl-js/v3.10.0/mapbox-gl.css" rel="stylesheet">
     <script src="https://api.mapbox.com/mapbox-gl-js/v3.10.0/mapbox-gl.js"></script>
     <script src="https://d3js.org/d3.v7.min.js"></script>
-
 
     <style>
         body {
@@ -21,14 +18,12 @@
             font-family: 'Poppins', sans-serif;
         }
 
-
         #map {
             position: absolute;
             top: 0;
             bottom: 0;
             width: 100%;
         }
-
 
         /* Legend styles */
         #legend {
@@ -46,7 +41,6 @@
             font-family: 'Poppins', sans-serif;
         }
 
-
         .legend-title {
             font-weight: 500;
             margin-bottom: 10px;
@@ -55,13 +49,11 @@
             letter-spacing: 0.5px;
         }
 
-
         .legend-item {
             display: flex;
             align-items: center;
             margin-bottom: 5px;
         }
-
 
         .color-circle {
             width: 15px;
@@ -71,18 +63,15 @@
             border: 1px solid #ccc;
         }
 
-
         .facility-label {
             font-size: 12px;
             flex-grow: 1;
             font-weight: 300;
         }
 
-
         .facility-checkbox {
             margin-right: 8px;
         }
-
 
         #open-csv-btn {
             display: block;
@@ -98,11 +87,87 @@
             cursor: pointer;
         }
 
-
         #open-csv-btn:hover {
             background: #444;
         }
 
+        #ab-marker-btn {
+            display: block;
+            width: 100%;
+            margin-bottom: 10px;
+            padding: 6px 0;
+            font-size: 13px;
+            font-family: 'Poppins', sans-serif;
+            background: #666;
+            color: #fff;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+
+        #ab-marker-btn:hover {
+            background: #888;
+        }
+
+        #ab-marker-btn.active {
+            background: #2ecc71;
+        }
+
+        #export-markers-btn {
+            display: none;
+            width: 100%;
+            margin-bottom: 10px;
+            padding: 6px 0;
+            font-size: 13px;
+            font-family: 'Poppins', sans-serif;
+            background: #3498db;
+            color: #fff;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+
+        #export-markers-btn:hover {
+            background: #2980b9;
+        }
+
+        #export-markers-btn.active {
+            display: block;
+        }
+
+        .marker-inputs {
+            display: none;
+            margin-bottom: 10px;
+            padding: 10px;
+            background: #f5f5f5;
+            border-radius: 3px;
+        }
+
+        .marker-inputs.active {
+            display: block;
+        }
+
+        .marker-input-group {
+            margin-bottom: 8px;
+        }
+
+        .marker-input-group label {
+            display: block;
+            font-size: 12px;
+            font-weight: 500;
+            margin-bottom: 3px;
+            color: #333;
+        }
+
+        .marker-input-group input {
+            width: 100%;
+            padding: 6px;
+            font-size: 12px;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+            font-family: 'Poppins', sans-serif;
+            box-sizing: border-box;
+        }
 
         /* Search input styles */
         #company-search {
@@ -116,11 +181,9 @@
             box-sizing: border-box;
         }
 
-
         #company-search::placeholder {
             color: #999;
         }
-
 
         /* Map overlay to control touch events */
         #map-overlay {
@@ -131,14 +194,11 @@
             background: transparent;
             z-index: 10;
             display: none;
-            /* Hidden by default, shown only on mobile */
         }
-
 
         .map-active #map-overlay {
             display: none;
         }
-
 
         /* Message shown on map overlay */
         .tap-instruction {
@@ -178,13 +238,24 @@
     </style>
 </head>
 
-
 <body>
     <div id="map"></div>
     <div id="map-overlay">
         <div class="tap-instruction">Tap to interact with map</div>
     </div>
     <div id="legend">
+        <button id="ab-marker-btn">Add A/B Markers</button>
+        <button id="export-markers-btn">Export Markers</button>
+        <div class="marker-inputs" id="marker-inputs">
+            <div class="marker-input-group">
+                <label for="marker-a-text">Marker A</label>
+                <input type="text" id="marker-a-text" placeholder="Enter text for A" />
+            </div>
+            <div class="marker-input-group">
+                <label for="marker-b-text">Marker B</label>
+                <input type="text" id="marker-b-text" placeholder="Enter text for B" />
+            </div>
+        </div>
         <button id="open-csv-btn">Open CSV</button>
         <input type="file" id="csv-file-input" accept=".csv" style="display:none" />
         <input type="text" id="company-search" placeholder="Filter by company name..." />
@@ -194,10 +265,6 @@
                 <input type="checkbox" class="layer-toggle-checkbox" id="toggle-rail" checked>
                 <label class="layer-toggle-label" for="toggle-rail">Rail Lines</label>
             </div>
-            <!-- <div class="layer-toggle-item">
-                <input type="checkbox" class="layer-toggle-checkbox" id="toggle-csv-points" checked>
-                <label class="layer-toggle-label" for="toggle-csv-points">CSV Points</label>
-            </div> -->
             <div class="layer-toggle-item">
                 <input type="checkbox" class="layer-toggle-checkbox" id="toggle-sensors" checked>
                 <label class="layer-toggle-label" for="toggle-sensors">Sensors</label>
@@ -207,29 +274,25 @@
                 <label class="layer-toggle-label" for="toggle-facilities">Facilities</label>
             </div>
         </div>
-        <!-- <div class="legend-title">Facility Types</div> -->
         <div id="legend-items"></div>
     </div>
     <script>
         const appData = {
             facilityFilters: [],
-            facilityColors: {}, // Will store the mapping of facility types to colors
+            facilityColors: {},
             facilityGeoJSON: [],
+            abMarkerMode: false,
+            markerA: null,
+            markerB: null,
         }
 
-
-        // Define a set of contrasting colors for the facility types
-        // const colorArray = [
-        //     '#e6194B', '#3cb44b', '#ffe119', '#4363d8', '#f58231',
-        //     '#911eb4', '#42d4f4', '#f032e6', '#bfef45', '#fabed4',
-        //     '#469990', '#dcbeff', '#9A6324', '#fffac8', '#800000',
-        //     '#aaffc3', '#808000', '#ffd8b1', '#000075', '#a9a9a9'
-        // ];
-
+        const globalState = {
+            A: { lat: null, lng: null, text: '' },
+            B: { lat: null, lng: null, text: '' }
+        }
 
         const lightStyle = 'mapbox://styles/mapbox/light-v11';
         const satelliteStyle = 'mapbox://styles/mapbox/satellite-streets-v12';
-
 
         mapboxgl.accessToken = 'pk.eyJ1IjoiZGV2b2VyYWlsc3RhdGUiLCJhIjoiY2wxNnZ1ejR0MDl2YjNicXNjd3R2dGx5ZCJ9.Y4aChG8-UtF_4FOQZF8R2Q';
         const map = new mapboxgl.Map({
@@ -241,79 +304,90 @@
             cooperativeGestures: true
         });
 
+        function updateGlobalState() {
+            console.log('Global State:', globalState);
+        }
 
-        // Function to generate the legend with checkboxes
+        function downloadCSV() {
+            const rows = [
+                ['name', 'lat', 'lng', 'text'],
+                ['A', globalState.A.lat || '', globalState.A.lng || '', globalState.A.text || ''],
+                ['B', globalState.B.lat || '', globalState.B.lng || '', globalState.B.text || '']
+            ];
+
+            const csvContent = rows.map(row => 
+                row.map(cell => {
+                    // Escape quotes and wrap in quotes if contains comma or quotes
+                    const cellStr = String(cell);
+                    if (cellStr.includes(',') || cellStr.includes('"') || cellStr.includes('\n')) {
+                        return `"${cellStr.replace(/"/g, '""')}"`;
+                    }
+                    return cellStr;
+                }).join(',')
+            ).join('\n');
+
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+            link.setAttribute('href', url);
+            link.setAttribute('download', 'markers.csv');
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
         function generateLegend(colorsFromCSV) {
             console.log(colorsFromCSV);
             const legendContainer = document.getElementById('legend-items');
-            legendContainer.innerHTML = ''; // Clear existing items
-
+            legendContainer.innerHTML = '';
 
             appData.facilityFilters.forEach((facilityType, index) => {
-                // Assign color from the array (cycle through if more types than colors)
-                const color = colorsFromCSV.get(facilityType) || '#FF0000'; // Default to red if not found
+                const color = colorsFromCSV.get(facilityType) || '#FF0000';
                 appData.facilityColors[facilityType] = color;
-
 
                 const legendItem = document.createElement('div');
                 legendItem.className = 'legend-item';
 
-
-                // Create checkbox
                 const checkbox = document.createElement('input');
                 checkbox.type = 'checkbox';
                 checkbox.className = 'facility-checkbox';
                 checkbox.id = `filter-${facilityType.replace(/\s+/g, '-')}`;
-                checkbox.checked = false; // Default to checked
+                checkbox.checked = false;
                 checkbox.addEventListener('change', (e) => {
                     filterFacilities();
                 });
 
-
-                // Create color circle
                 const colorCircle = document.createElement('span');
                 colorCircle.className = 'color-circle';
                 colorCircle.style.backgroundColor = color;
 
-
-                // Create label
                 const label = document.createElement('label');
                 label.className = 'facility-label';
                 label.htmlFor = checkbox.id;
                 label.textContent = facilityType;
 
-
-                // Assemble the legend item
                 legendItem.appendChild(checkbox);
                 legendItem.appendChild(colorCircle);
                 legendItem.appendChild(label);
-
 
                 legendContainer.appendChild(legendItem);
             });
         }
 
-
-        // Unified filter function for both facility type and company name
         function filterFacilities(searchText) {
-            // Get search text from parameter or input field
             if (searchText === undefined) {
                 searchText = document.getElementById('company-search').value;
             }
 
-
-            // Get the currently selected facility types
             const selectedFacilityTypes = [];
             document.querySelectorAll('.facility-checkbox').forEach(checkbox => {
                 if (checkbox.checked) {
-                    // Extract facility type from the checkbox ID
                     const facilityType = checkbox.id.replace('filter-', '').replace(/-/g, ' ');
                     selectedFacilityTypes.push(facilityType);
                 }
             });
 
-
-            // If no facility types are selected, show no facilities
             if (selectedFacilityTypes.length === 0) {
                 map.getSource('facilities').setData({
                     type: 'FeatureCollection',
@@ -322,8 +396,6 @@
                 return;
             }
 
-
-            // Filter facilities by both company name and facility type
             const filtered = appData.facilityGeoJSON.filter(item => {
                 const matchesSearchText = item.properties['Company'] &&
                     item.properties['Company'].toLowerCase().includes(searchText.toLowerCase());
@@ -332,37 +404,102 @@
                 return matchesSearchText && matchesFacilityType;
             });
 
-
             map.getSource('facilities').setData({
                 type: 'FeatureCollection',
                 features: filtered
             });
         }
 
+        function createPinMarker(letter, color) {
+            const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 30 50" width="30" height="50">
+                <path d="M15 0C8.4 0 3 5.4 3 12c0 8 12 38 12 38s12-30 12-38c0-6.6-5.4-12-12-12z" fill="${color}" stroke="white" stroke-width="2"/>
+                <text x="15" y="14" text-anchor="middle" dy="0.3em" font-size="16" font-weight="bold" fill="white" font-family="Arial">${letter}</text>
+            </svg>`;
+
+            const el = document.createElement('div');
+            el.innerHTML = svg;
+            el.style.cursor = 'grab';
+            return el.firstChild;
+        }
+
+        function addABMarker(lngLat) {
+            if (!appData.abMarkerMode) return;
+
+            if (!appData.markerA) {
+                const el = createPinMarker('A', '#4285F4');
+                appData.markerA = new mapboxgl.Marker({
+                    element: el,
+                    draggable: true,
+                    anchor: 'bottom'
+                })
+                    .setLngLat(lngLat)
+                    .addTo(map);
+
+                globalState.A.lat = lngLat.lat;
+                globalState.A.lng = lngLat.lng;
+
+                appData.markerA.on('dragend', () => {
+                    const lngLat = appData.markerA.getLngLat();
+                    globalState.A.lat = lngLat.lat;
+                    globalState.A.lng = lngLat.lng;
+                    updateGlobalState();
+                });
+
+                updateGlobalState();
+            } else if (!appData.markerB) {
+                const el = createPinMarker('B', '#EA4335');
+                appData.markerB = new mapboxgl.Marker({
+                    element: el,
+                    draggable: true,
+                    anchor: 'bottom'
+                })
+                    .setLngLat(lngLat)
+                    .addTo(map);
+
+                globalState.B.lat = lngLat.lat;
+                globalState.B.lng = lngLat.lng;
+
+                appData.markerB.on('dragend', () => {
+                    const lngLat = appData.markerB.getLngLat();
+                    globalState.B.lat = lngLat.lat;
+                    globalState.B.lng = lngLat.lng;
+                    updateGlobalState();
+                });
+
+                updateGlobalState();
+            }
+        }
+
+        function clearABMarkers() {
+            if (appData.markerA) {
+                appData.markerA.remove();
+                appData.markerA = null;
+            }
+            if (appData.markerB) {
+                appData.markerB.remove();
+                appData.markerB = null;
+            }
+            globalState.A = { lat: null, lng: null, text: '' };
+            globalState.B = { lat: null, lng: null, text: '' };
+            document.getElementById('marker-a-text').value = '';
+            document.getElementById('marker-b-text').value = '';
+        }
 
         map.on('load', () => {
-
-
             const popup = new mapboxgl.Popup({
                 closeButton: true,
                 closeOnClick: true,
                 maxWidth: '300px'
             });
 
-
             d3.csv("https://docs.google.com/spreadsheets/d/e/2PACX-1vTET61Cfrm5ALqSSBwTMGiiV7XhZP8Ufe2CJV8chBgv2Le14cy6WQmHLoNj2jQHlChZJbgeq26Z87SW/pub?output=csv")
                 .then(function (data) {
                     console.log(data);
                     const colorsFromCSV = new Map();
                     const filters = []
-                    // Process each data point
                     const features = data
                         .filter(code => code.Latitude && code.Longitude)
                         .map(code => {
-                            // filters.push(code['Facility Type'])
-                            // colorsFromCSV.set(code['Facility Type'], code['Color']);
-
-
                             return {
                                 type: 'Feature',
                                 properties: {
@@ -376,20 +513,14 @@
                         });
                     console.log('features', features);
 
-
                     map.getSource('facilities').setData({
                         type: 'FeatureCollection',
                         features: features
                     });
 
-
-                    appData.facilityGeoJSON = features; // Store the GeoJSON data
-
-
-                    // Remove duplicates from the filters array
+                    appData.facilityGeoJSON = features;
                     const uniqueFilters = [...new Set(filters)];
                     appData.facilityFilters = uniqueFilters;
-
 
                     const displayFields = [
                         { key: 'Site Name', label: 'Site Name' },
@@ -399,14 +530,10 @@
                         { key: 'Traffic Coverage', label: 'Traffic Coverage' }
                     ];
 
-
-                    // Add click event for facilities to show popup
                     map.on('click', 'facilities', (e) => {
                         const coordinates = e.features[0].geometry.coordinates.slice();
                         const properties = e.features[0].properties;
 
-
-                        // Generate the header section
                         let popupContent = `
                             <div style="font-family: 'Poppins', sans-serif; padding: 5px;">
                             <h3 style="margin-top: 0; margin-bottom: 10px; color: #333; font-size: 16px; border-bottom: 1px solid #eee; padding-bottom: 5px;">
@@ -414,8 +541,6 @@
                             </h3>
                         `;
 
-
-                        // Generate each field row
                         displayFields.forEach(field => {
                             popupContent += properties[field.key] !== "" ? `
                             <div style="margin-bottom: 5px;">
@@ -425,57 +550,32 @@
                             ` : ``;
                         });
 
-
-                        // Close the container div
                         popupContent += `</div>`;
-
 
                         while (Math.abs(e.lngLat.lng - coordinates[0]) > 180) {
                             coordinates[0] += e.lngLat.lng > coordinates[0] ? 360 : -360;
                         }
-
 
                         popup.setLngLat(coordinates)
                             .setHTML(popupContent)
                             .addTo(map);
                     });
 
-
-                    // Change cursor to pointer when hovering over facilities
                     map.on('mouseenter', 'facilities', () => {
                         map.getCanvas().style.cursor = 'pointer';
                     });
-
 
                     map.on('mouseleave', 'facilities', () => {
                         map.getCanvas().style.cursor = '';
                     });
 
-
-                    // Generate the legend
                     generateLegend(colorsFromCSV);
-
-
-                    // Apply initial filter to hide all points since all checkboxes are off by default
-                    // filterFacilities();
-
-
-                    // // Update the circle colors based on facility type
-                    // map.setPaintProperty('facilities', 'circle-color', [
-                    //     'match',
-                    //     ['get', 'Facility Type'],
-                    //     ...uniqueFilters.flatMap(type => [type, appData.facilityColors[type] || '#FF0000']),
-                    //     '#CCCCCC' // default color
-                    // ]);
                 });
-
 
             d3.csv("https://docs.google.com/spreadsheets/d/e/2PACX-1vRb3b2jMVWa5Zi5_cLYJIhkC1sZP2T1FAH8yVwuN0egPLEsOI7HwMn7Tp8KtAqI0eGJnfgG-jz-LtRx/pub?output=csv")
                 .then(function (data) {
                     console.log(data);
 
-
-                    // Process each data point
                     const features = data
                         .filter(code => code.Latitude && code.Longitude)
                         .map(code => {
@@ -496,7 +596,6 @@
                         features: features
                     });
                 });
-
 
             map.addSource('rail', {
                 type: 'vector',
@@ -522,7 +621,7 @@
                         "CPRS", "#2E8A59",
                         "CSXT", "#1F6DAD",
                         "UP", "#E1BC29",
-                        /* other values */ '#ccc' // default color
+                        '#ccc'
                     ],
                     'line-width': [
                         'interpolate',
@@ -534,54 +633,46 @@
                         22, 10
                     ]
                 }
-            }, 'road-label-simple' // Add layer below labels
-            );
-
+            }, 'road-label-simple');
 
             map.addSource('rail2', {
                 type: 'vector',
                 url: 'mapbox://devoerailstate.23t98xmy'
             });
-            map.addLayer(
-                {
-                    'id': 'rail-data-2',
-                    'type': 'line',
-                    'source': 'rail2',
-                    'source-layer': 'NTAD',
-                    'layout': {
-                        'line-join': 'round',
-                        'line-cap': 'round'
-                    },
-                    'paint': {
-                        'line-color': [
-                            'match',
-                            ['get', 'RROWNER1'],
-                            "BNSF", "#FF7F11",
-                            "CN", "#B80000",
-                            "NS", "#3F3B3F",
-                            "CPKC", "#2E8A59",
-                            "CPRS", "#2E8A59",
-                            "CSXT", "#1F6DAD",
-                            "UP", "#E1BC29",
-                        /* other values */ '#ccc' // default color
-                        ],
-                        'line-width': [
-                            'interpolate',
-                            ['linear'],
-                            ['zoom'],
-                            0, 0.5,
-                            8, 1,
-                            12, 2,
-                            22, 10
-                        ]
-                    }
+            map.addLayer({
+                'id': 'rail-data-2',
+                'type': 'line',
+                'source': 'rail2',
+                'source-layer': 'NTAD',
+                'layout': {
+                    'line-join': 'round',
+                    'line-cap': 'round'
                 },
-                'road-label-simple' // Add layer below labels
-            );
+                'paint': {
+                    'line-color': [
+                        'match',
+                        ['get', 'RROWNER1'],
+                        "BNSF", "#FF7F11",
+                        "CN", "#B80000",
+                        "NS", "#3F3B3F",
+                        "CPKC", "#2E8A59",
+                        "CPRS", "#2E8A59",
+                        "CSXT", "#1F6DAD",
+                        "UP", "#E1BC29",
+                        '#ccc'
+                    ],
+                    'line-width': [
+                        'interpolate',
+                        ['linear'],
+                        ['zoom'],
+                        0, 0.5,
+                        8, 1,
+                        12, 2,
+                        22, 10
+                    ]
+                }
+            }, 'road-label-simple');
 
-
-
-            //add mapbox satellite layer
             map.addSource('satellite', {
                 type: 'raster',
                 tiles: ['https://api.mapbox.com/styles/v1/mapbox/satellite-streets-v12/tiles/{z}/{x}/{y}?access_token=' + mapboxgl.accessToken],
@@ -598,16 +689,10 @@
                 maxzoom: 22
             }, 'rail-data');
 
-
             map.on('zoom', () => {
                 map.getZoom() < 12 ? map.setLayoutProperty('satellite-layer', 'visibility', 'none') : map.setLayoutProperty('satellite-layer', 'visibility', 'visible');
             });
 
-
-
-
-
-            // Add empty geojson source for CSV points
             map.addSource('csv-points', {
                 type: 'geojson',
                 data: {
@@ -627,7 +712,7 @@
                     'circle-stroke-color': '#fff'
                 }
             });
-            // Add empty geojson source for CSV points
+
             map.addSource('sensors', {
                 type: 'geojson',
                 data: {
@@ -662,13 +747,9 @@
                     'text-color': '#000000',
                     'text-halo-color': '#FFFFFF',
                     'text-halo-width': 1
-
-
                 }
             });
 
-
-            // Add a layer for the facilities
             map.addSource('facilities', {
                 type: 'geojson',
                 data: {
@@ -682,103 +763,99 @@
                 source: 'facilities',
                 paint: {
                     'circle-radius': 5,
-                    'circle-color': '#FF0000', // This will be overridden when we load data
+                    'circle-color': '#FF0000',
                     'circle-opacity': 0.8,
                     'circle-stroke-width': 1,
                     'circle-stroke-color': '#FFFFFF'
                 }
             });
 
-
-            // Add the company search event listener
             document.getElementById('company-search').addEventListener('input', (e) => {
                 filterFacilities(e.target.value);
             });
 
-            // Layer toggle event listeners
-            document.getElementById('toggle-rail').addEventListener('change', function(e) {
+            document.getElementById('toggle-rail').addEventListener('change', function (e) {
                 const visibility = e.target.checked ? 'visible' : 'none';
                 map.setLayoutProperty('rail-data', 'visibility', visibility);
                 map.setLayoutProperty('rail-data-2', 'visibility', visibility);
             });
 
-            // document.getElementById('toggle-csv-points').addEventListener('change', function(e) {
-            //     const visibility = e.target.checked ? 'visible' : 'none';
-            //     map.setLayoutProperty('csv-points-layer', 'visibility', visibility);
-            // });
-
-            document.getElementById('toggle-sensors').addEventListener('change', function(e) {
+            document.getElementById('toggle-sensors').addEventListener('change', function (e) {
                 const visibility = e.target.checked ? 'visible' : 'none';
                 map.setLayoutProperty('sensors-layer', 'visibility', visibility);
                 map.setLayoutProperty('sensors-label', 'visibility', visibility);
             });
 
-            document.getElementById('toggle-facilities').addEventListener('change', function(e) {
+            document.getElementById('toggle-facilities').addEventListener('change', function (e) {
                 const visibility = e.target.checked ? 'visible' : 'none';
                 map.setLayoutProperty('facilities', 'visibility', visibility);
             });
 
+            document.getElementById('ab-marker-btn').addEventListener('click', function (e) {
+                appData.abMarkerMode = !appData.abMarkerMode;
+                e.target.classList.toggle('active');
+                document.getElementById('marker-inputs').classList.toggle('active');
+                document.getElementById('export-markers-btn').classList.toggle('active');
+                if (!appData.abMarkerMode) {
+                    clearABMarkers();
+                }
+            });
 
-            // Mobile map interaction handling
+            document.getElementById('marker-a-text').addEventListener('input', function (e) {
+                globalState.A.text = e.target.value;
+                updateGlobalState();
+            });
+
+            document.getElementById('marker-b-text').addEventListener('input', function (e) {
+                globalState.B.text = e.target.value;
+                updateGlobalState();
+            });
+
+            document.getElementById('export-markers-btn').addEventListener('click', function () {
+                downloadCSV();
+            });
+
+            map.on('click', function (e) {
+                if (appData.abMarkerMode && (!appData.markerA || !appData.markerB)) {
+                    addABMarker(e.lngLat);
+                }
+            });
+
             const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
             const mapContainer = document.getElementById('map');
             const mapOverlay = document.getElementById('map-overlay');
 
-
             if (isMobile) {
-                // Show overlay on mobile devices
                 mapOverlay.style.display = 'block';
-
-
-                // Disable map interaction by default on mobile
                 map.scrollZoom.disable();
                 map.dragPan.disable();
                 map.touchZoomRotate.disable();
 
-
-                // Enable interaction when user taps the overlay
                 mapOverlay.addEventListener('click', function () {
                     mapContainer.classList.add('map-active');
                     map.scrollZoom.enable();
                     map.dragPan.enable();
                     map.touchZoomRotate.enable();
-
-
-                    // Hide overlay when user wants to interact with map
                     mapOverlay.style.display = 'none';
-
-
-                    // Add event listener to detect when user is done with the map
                     document.addEventListener('touchstart', checkIfOutsideMap);
                 });
 
-
                 function checkIfOutsideMap(e) {
-                    // If touch is outside map, disable map interactions again
                     if (!mapContainer.contains(e.target) || e.target.id === 'legend' || e.target.closest('#legend')) {
                         mapContainer.classList.remove('map-active');
                         map.scrollZoom.disable();
                         map.dragPan.disable();
                         map.touchZoomRotate.disable();
-
-
-                        // Show overlay again
                         mapOverlay.style.display = 'block';
-
-
-                        // Remove this event listener until map is activated again
                         document.removeEventListener('touchstart', checkIfOutsideMap);
                     }
                 }
             }
         });
 
-
-        // CSV file open logic
         document.getElementById('open-csv-btn').addEventListener('click', function () {
             document.getElementById('csv-file-input').click();
         });
-
 
         document.getElementById('csv-file-input').addEventListener('change', function (evt) {
             const file = evt.target.files[0];
@@ -786,9 +863,7 @@
             const reader = new FileReader();
             reader.onload = function (e) {
                 const csvText = e.target.result;
-                // Parse CSV using d3.csvParse
                 const data = d3.csvParse(csvText);
-                // Filter and map to GeoJSON features
                 const features = data
                     .filter(row => row.latitude && row.longitude)
                     .map(row => ({
@@ -799,7 +874,6 @@
                             coordinates: [parseFloat(row.longitude), parseFloat(row.latitude)]
                         }
                     }));
-                // Update the source data
                 if (map.getSource('csv-points')) {
                     console.log('features', features);
                     map.getSource('csv-points').setData({
@@ -809,15 +883,9 @@
                 }
             };
             reader.readAsText(file);
-            // Reset file input so same file can be re-uploaded if needed
             evt.target.value = '';
         });
-
-
     </script>
-
-
 </body>
-
 
 </html>
