@@ -665,7 +665,7 @@
                     layers: ['rail-data', 'rail-data-2']
                 });
 
-                console.log('Rail features found:', railFeatures.length);
+                console.log('Rail features found:', railFeatures);
 
                 if (railFeatures.length === 0) {
                     console.log('No rail features found');
@@ -772,9 +772,10 @@
                         ['linear'],
                         ['zoom'],
                         0, 0.5,
-                        8, 1,
-                        12, 2,
-                        22, 10
+                        4, 1,
+                        8, 4,
+                        12, 12,
+                        22, 13
                     ]
                 }
             }, 'road-label-simple');
@@ -810,9 +811,10 @@
                         ['linear'],
                         ['zoom'],
                         0, 0.5,
-                        8, 1,
-                        12, 2,
-                        22, 10
+                        4, 1,
+                        8, 4,
+                        12, 12,
+                        22, 13
                     ]
                 }
             }, 'road-label-simple');
@@ -836,6 +838,55 @@
             map.on('zoom', () => {
                 map.getZoom() < 12 ? map.setLayoutProperty('satellite-layer', 'visibility', 'none') : map.setLayoutProperty('satellite-layer', 'visibility', 'visible');
             });
+
+            // Helper function to generate rail popup content
+            function generateRailPopup(properties) {
+                const name = properties['SUBDIV'] || properties['BRANCH'] || properties['RROWNER1'] || 'Unknown';
+
+                const fields = [
+                    { label: 'Subdivision', value: properties['SUBDIV'] },
+                    { label: 'Railroad', value: properties['RROWNER1'] },
+                    { label: 'State', value: properties['STATEAB'] },
+                    { label: 'Distance (km)', value: properties['KM'] ? parseFloat(properties['KM']).toFixed(3) : 'N/A' }
+                ];
+
+                const fieldHTML = fields
+                    .filter(field => field.value)
+                    .map(field => `
+                            <div style="margin-bottom: 5px;">
+                                <strong style="color: #555; font-size: 13px;">${field.label}:</strong> 
+                                <span style="font-size: 13px;">${field.value}</span>
+                            </div>
+                        `)
+                    .join('');
+
+                return `
+                    <div style="font-family: 'Poppins', sans-serif; padding: 8px;">
+                        <h3 style="margin: 0 0 10px 0; color: #333; font-size: 16px; border-bottom: 1px solid #eee; padding-bottom: 5px;">
+                            ${name}
+                        </h3>
+                        ${fieldHTML}
+                    </div>
+                `;
+            }
+
+            // Popup for both rail layers
+            ['rail-data', 'rail-data-2'].forEach(layerId => {
+                map.on('click', layerId, (e) => {
+                    popup.setLngLat(e.lngLat)
+                        .setHTML(generateRailPopup(e.features[0].properties))
+                        .addTo(map);
+                });
+
+                map.on('mouseenter', layerId, () => {
+                    map.getCanvas().style.cursor = 'pointer';
+                });
+
+                map.on('mouseleave', layerId, () => {
+                    map.getCanvas().style.cursor = '';
+                });
+            });
+
 
             map.addSource('csv-points', {
                 type: 'geojson',
