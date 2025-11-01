@@ -448,10 +448,10 @@
             // Filter by both railroad and company search text
             const filtered = appData.facilityGeoJSON.filter(item => {
                 // Check if company name matches search text
-                const matchesSearchText = !searchText || 
-                    (item.properties['Company'] && 
-                    item.properties['Company'].toLowerCase().includes(searchText.toLowerCase()));
-                
+                const matchesSearchText = !searchText ||
+                    (item.properties['Company'] &&
+                        item.properties['Company'].toLowerCase().includes(searchText.toLowerCase()));
+
                 // Check if railroad matches selected railroads
                 const facilityRailroad = item.properties['Railroad'];
                 const matchesRailroad = selectedRailroads.includes(facilityRailroad);
@@ -591,6 +591,9 @@
                     ];
 
                     map.on('click', 'facilities', (e) => {
+
+                        const subdivisions = getSubdivision(e)
+
                         const coordinates = e.features[0].geometry.coordinates.slice();
                         const properties = e.features[0].properties;
 
@@ -609,6 +612,13 @@
                             </div> 
                             ` : ``;
                         });
+
+                        const subDivs = properties['Subdivision'].length > 1 ? properties['Subdivision'] : subdivisions.join(', ');
+                        popupContent += `
+                            <div style="margin-bottom: 5px;">
+                                <strong style="color: #555; font-size: 13px;">Subdivision:</strong> 
+                                <span style="font-size: 13px;">${subDivs}</span>
+                            </div>`;
 
                         popupContent += `</div>`;
 
@@ -630,7 +640,53 @@
                     });
 
                     generateLegend(colorsFromCSV);
+
+
                 });
+
+            function getSubdivision(e) {
+                // Create 5px bounding box around clicked point
+                const bbox = [
+                    [e.point.x - 5, e.point.y - 5],
+                    [e.point.x + 5, e.point.y + 5]
+                ];
+
+                // Query features from all layers
+                const allFeatures = map.queryRenderedFeatures(bbox);
+
+                // Query only from facilities layer
+                const facilityFeatures = map.queryRenderedFeatures(bbox, {
+                    layers: ['facilities']
+                });
+
+                // Query from multiple layers
+                const specificFeatures = map.queryRenderedFeatures(bbox, {
+                    layers: ['rail-data', 'rail-data-2']
+                });
+
+                console.log('All features:', allFeatures);
+                console.log('Facility features:', facilityFeatures);
+                console.log('Specific layers:', specificFeatures);
+
+                // Extract properties
+                if (facilityFeatures.length > 0) {
+                    facilityFeatures.forEach(feature => {
+                        console.log('Facility:', feature.properties);
+                        console.log('Layer:', feature.layer.id);
+                        console.log('Geometry:', feature.geometry);
+                    });
+                }
+
+                const SUBDIV = new Set()
+                specificFeatures.forEach(feature => {
+                    console.log('Specific Layer Feature:', feature.properties);
+                    if (feature.properties['SUBDIV']) {
+                        SUBDIV.add(feature.properties['SUBDIV']);
+                    }
+                });
+
+                return [...SUBDIV];
+            }
 
             d3.csv("https://docs.google.com/spreadsheets/d/e/2PACX-1vRb3b2jMVWa5Zi5_cLYJIhkC1sZP2T1FAH8yVwuN0egPLEsOI7HwMn7Tp8KtAqI0eGJnfgG-jz-LtRx/pub?output=csv")
                 .then(function (data) {
