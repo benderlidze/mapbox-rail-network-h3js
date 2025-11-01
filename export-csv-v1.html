@@ -10,6 +10,7 @@
     <link href="https://api.mapbox.com/mapbox-gl-js/v3.10.0/mapbox-gl.css" rel="stylesheet">
     <script src="https://api.mapbox.com/mapbox-gl-js/v3.10.0/mapbox-gl.js"></script>
     <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://unpkg.com/@turf/turf@7.2.0/turf.min.js"></script>
 
     <style>
         body {
@@ -645,48 +646,75 @@
                 });
 
             function getSubdivision(e) {
-                // Create 5px bounding box around clicked point
+                // Convert click point to Turf.js format
+                const clickPoint = turf.point([e.lngLat.lng, e.lngLat.lat]);
+
+                // Use larger bbox for better detection - scale with zoom
+                // const zoomLevel = map.getZoom();
+                // const bboxSize = Math.max(10, 100 / Math.pow(2, zoomLevel - 10));
+                const zoomLevel = map.getZoom();
+                const bboxSize = Math.max(50, Math.min(400, 50 + (zoomLevel - 10) * 50));
+
                 const bbox = [
-                    [e.point.x - 5, e.point.y - 5],
-                    [e.point.x + 5, e.point.y + 5]
+                    [e.point.x - bboxSize, e.point.y - bboxSize],
+                    [e.point.x + bboxSize, e.point.y + bboxSize]
                 ];
 
-                // Query features from all layers
-                const allFeatures = map.queryRenderedFeatures(bbox);
-
-                // Query only from facilities layer
-                const facilityFeatures = map.queryRenderedFeatures(bbox, {
-                    layers: ['facilities']
-                });
-
-                // Query from multiple layers
-                const specificFeatures = map.queryRenderedFeatures(bbox, {
+                // Query rail features from both layers
+                const railFeatures = map.queryRenderedFeatures(bbox, {
                     layers: ['rail-data', 'rail-data-2']
                 });
 
-                console.log('All features:', allFeatures);
-                console.log('Facility features:', facilityFeatures);
-                console.log('Specific layers:', specificFeatures);
+                console.log('Rail features found:', railFeatures.length);
 
-                // Extract properties
-                if (facilityFeatures.length > 0) {
-                    facilityFeatures.forEach(feature => {
-                        console.log('Facility:', feature.properties);
-                        console.log('Layer:', feature.layer.id);
-                        console.log('Geometry:', feature.geometry);
-                    });
+                if (railFeatures.length === 0) {
+                    console.log('No rail features found');
+                    return [];
                 }
 
-                const SUBDIV = new Set()
-                specificFeatures.forEach(feature => {
-                    console.log('Specific Layer Feature:', feature.properties);
-                    if (feature.properties['SUBDIV']) {
-                        SUBDIV.add(feature.properties['SUBDIV']);
+                // Find closest line to click point using Turf.js
+                let closestFeature = null;
+                let closestDistance = Infinity;
+
+                railFeatures.forEach(feature => {
+                    try {
+                        if (feature.geometry.type === 'LineString' || feature.geometry.type === 'MultiLineString') {
+                            // Find nearest point on this line
+                            const nearestPt = turf.nearestPointOnLine(feature, clickPoint);
+                            const distance = nearestPt.properties.dist;
+
+                            //console.log('Distance to line:', distance, 'km');
+
+                            if (distance < closestDistance) {
+                                closestDistance = distance;
+                                closestFeature = feature;
+                            }
+                        }
+                    } catch (error) {
+                        console.error('Error processing feature:', error);
                     }
                 });
 
+                // Extract subdivisions from closest feature
+                const SUBDIV = new Set();
+                if (closestFeature) {
+                    console.log('Closest feature properties:', closestFeature.properties);
+                    console.log('Closest distance:', closestDistance, 'km');
+
+                    if (closestFeature.properties['SUBDIV']) {
+                        SUBDIV.add(closestFeature.properties['SUBDIV']);
+                    }
+
+                    // Add additional properties for debugging
+                    console.log('Layer:', closestFeature.layer.id);
+                    console.log('RROWNER1:', closestFeature.properties['RROWNER1']);
+                } else {
+                    console.log('No suitable rail line found');
+                }
+
                 return [...SUBDIV];
             }
+
 
             d3.csv("https://docs.google.com/spreadsheets/d/e/2PACX-1vRb3b2jMVWa5Zi5_cLYJIhkC1sZP2T1FAH8yVwuN0egPLEsOI7HwMn7Tp8KtAqI0eGJnfgG-jz-LtRx/pub?output=csv")
                 .then(function (data) {
