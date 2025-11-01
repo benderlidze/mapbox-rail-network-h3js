@@ -299,7 +299,7 @@
         ];
 
         const appData = {
-            facilityFilters: [],
+            facilityFilters: [], // Will store selected railroad names
             facilityColors: {},
             facilityGeoJSON: [],
             abMarkerMode: false,
@@ -356,6 +356,9 @@
 
                 container.appendChild(legendItem);
             });
+
+            // Initialize facilityFilters with all railroads
+            appData.facilityFilters = railroads.map(r => r.name);
         }
 
         function updateGlobalState() {
@@ -399,6 +402,11 @@
                 }
             });
 
+            // Update appData.facilityFilters with selected railroads
+            appData.facilityFilters = selectedRailroads;
+            console.log('Selected Railroads:', appData.facilityFilters);
+
+            // Filter rail lines
             if (selectedRailroads.length === 0) {
                 map.setFilter('rail-data', ['==', 'RROWNER1', '']);
                 map.setFilter('rail-data-2', ['==', 'RROWNER1', '']);
@@ -407,6 +415,9 @@
                 map.setFilter('rail-data', filter);
                 map.setFilter('rail-data-2', filter);
             }
+
+            // Also filter facilities by selected railroads
+            filterFacilities();
         }
 
         function generateLegend(colorsFromCSV) {
@@ -414,37 +425,8 @@
             const legendContainer = document.getElementById('legend-items');
             legendContainer.innerHTML = '';
 
-            appData.facilityFilters.forEach((facilityType, index) => {
-                const color = colorsFromCSV.get(facilityType) || '#FF0000';
-                appData.facilityColors[facilityType] = color;
-
-                const legendItem = document.createElement('div');
-                legendItem.className = 'legend-item';
-
-                const checkbox = document.createElement('input');
-                checkbox.type = 'checkbox';
-                checkbox.className = 'facility-checkbox';
-                checkbox.id = `filter-${facilityType.replace(/\s+/g, '-')}`;
-                checkbox.checked = false;
-                checkbox.addEventListener('change', (e) => {
-                    filterFacilities();
-                });
-
-                const colorCircle = document.createElement('span');
-                colorCircle.className = 'color-circle';
-                colorCircle.style.backgroundColor = color;
-
-                const label = document.createElement('label');
-                label.className = 'facility-label';
-                label.htmlFor = checkbox.id;
-                label.textContent = facilityType;
-
-                legendItem.appendChild(checkbox);
-                legendItem.appendChild(colorCircle);
-                legendItem.appendChild(label);
-
-                legendContainer.appendChild(legendItem);
-            });
+            // This function is for facility type filters, not railroad filters
+            // Currently empty as filters array is empty
         }
 
         function filterFacilities(searchText) {
@@ -452,15 +434,10 @@
                 searchText = document.getElementById('company-search').value;
             }
 
-            const selectedFacilityTypes = [];
-            document.querySelectorAll('.facility-checkbox:not(.railroad-checkbox)').forEach(checkbox => {
-                if (checkbox.checked) {
-                    const facilityType = checkbox.id.replace('filter-', '').replace(/-/g, ' ');
-                    selectedFacilityTypes.push(facilityType);
-                }
-            });
+            const selectedRailroads = appData.facilityFilters;
 
-            if (selectedFacilityTypes.length === 0) {
+            // If no railroads are selected, show no facilities
+            if (selectedRailroads.length === 0) {
                 map.getSource('facilities').setData({
                     type: 'FeatureCollection',
                     features: []
@@ -468,12 +445,19 @@
                 return;
             }
 
+            // Filter by both railroad and company search text
             const filtered = appData.facilityGeoJSON.filter(item => {
-                const matchesSearchText = item.properties['Company'] &&
-                    item.properties['Company'].toLowerCase().includes(searchText.toLowerCase());
-                const facilityType = item.properties['Facility Type'];
-                const matchesFacilityType = selectedFacilityTypes.includes(facilityType);
-                return matchesSearchText && matchesFacilityType;
+                // Check if company name matches search text
+                const matchesSearchText = !searchText || 
+                    (item.properties['Company'] && 
+                    item.properties['Company'].toLowerCase().includes(searchText.toLowerCase()));
+                
+                // Check if railroad matches selected railroads
+                const facilityRailroad = item.properties['Railroad'];
+                const matchesRailroad = selectedRailroads.includes(facilityRailroad);
+
+                // Both conditions must be true
+                return matchesSearchText && matchesRailroad;
             });
 
             map.getSource('facilities').setData({
@@ -588,14 +572,15 @@
                         });
                     console.log('features', features);
 
+                    appData.facilityGeoJSON = features;
+
                     map.getSource('facilities').setData({
                         type: 'FeatureCollection',
                         features: features
                     });
 
-                    appData.facilityGeoJSON = features;
-                    const uniqueFilters = [...new Set(filters)];
-                    appData.facilityFilters = uniqueFilters;
+                    // Apply initial filter based on selected railroads
+                    filterFacilities();
 
                     const displayFields = [
                         { key: 'Site Name', label: 'Site Name' },
