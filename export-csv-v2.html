@@ -1,0 +1,1086 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <title>Add a vector tile source</title>
+    <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
+
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <link href="https://api.mapbox.com/mapbox-gl-js/v3.10.0/mapbox-gl.css" rel="stylesheet">
+    <script src="https://api.mapbox.com/mapbox-gl-js/v3.10.0/mapbox-gl.js"></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://unpkg.com/@turf/turf@7.2.0/turf.min.js"></script>
+
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Poppins', sans-serif;
+        }
+
+        #map {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 100%;
+        }
+
+        /* Legend styles */
+        #legend {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 10px;
+            border-radius: 4px;
+            max-height: 70vh;
+            overflow-y: auto;
+            width: 250px;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+            z-index: 1;
+            font-family: 'Poppins', sans-serif;
+        }
+
+        .legend-title {
+            font-weight: 500;
+            margin-bottom: 10px;
+            text-align: center;
+            font-size: 14px;
+            letter-spacing: 0.5px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 5px;
+        }
+
+        .color-circle {
+            width: 15px;
+            height: 15px;
+            border-radius: 50%;
+            margin-right: 10px;
+            border: 1px solid #ccc;
+        }
+
+        .facility-label {
+            font-size: 12px;
+            flex-grow: 1;
+            font-weight: 300;
+        }
+
+        .facility-checkbox {
+            margin-right: 8px;
+        }
+
+        #open-csv-btn {
+            display: block;
+            width: 100%;
+            margin-bottom: 10px;
+            padding: 6px 0;
+            font-size: 13px;
+            font-family: 'Poppins', sans-serif;
+            background: #222;
+            color: #fff;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+
+        #open-csv-btn:hover {
+            background: #444;
+        }
+
+        #ab-marker-btn {
+            display: block;
+            width: 100%;
+            margin-bottom: 10px;
+            padding: 6px 0;
+            font-size: 13px;
+            font-family: 'Poppins', sans-serif;
+            background: #666;
+            color: #fff;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+
+        #ab-marker-btn:hover {
+            background: #888;
+        }
+
+        #ab-marker-btn.active {
+            background: #2ecc71;
+        }
+
+        #export-markers-btn {
+            display: none;
+            width: 100%;
+            margin-bottom: 10px;
+            padding: 6px 0;
+            font-size: 13px;
+            font-family: 'Poppins', sans-serif;
+            background: #3498db;
+            color: #fff;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+
+        #export-markers-btn:hover {
+            background: #2980b9;
+        }
+
+        #export-markers-btn.active {
+            display: block;
+        }
+
+        .marker-inputs {
+            display: none;
+            margin-bottom: 10px;
+            padding: 10px;
+            background: #f5f5f5;
+            border-radius: 3px;
+        }
+
+        .marker-inputs.active {
+            display: block;
+        }
+
+        .marker-input-group {
+            margin-bottom: 8px;
+        }
+
+        .marker-input-group label {
+            display: block;
+            font-size: 12px;
+            font-weight: 500;
+            margin-bottom: 3px;
+            color: #333;
+        }
+
+        .marker-input-group input {
+            width: 100%;
+            padding: 6px;
+            font-size: 12px;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+            font-family: 'Poppins', sans-serif;
+            box-sizing: border-box;
+        }
+
+        /* Search input styles */
+        #company-search {
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 10px;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+            font-family: 'Poppins', sans-serif;
+            font-size: 13px;
+            box-sizing: border-box;
+        }
+
+        #company-search::placeholder {
+            color: #999;
+        }
+
+        /* Map overlay to control touch events */
+        #map-overlay {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 100%;
+            background: transparent;
+            z-index: 10;
+            display: none;
+        }
+
+        .map-active #map-overlay {
+            display: none;
+        }
+
+        /* Message shown on map overlay */
+        .tap-instruction {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 10px 15px;
+            border-radius: 20px;
+            font-size: 14px;
+            pointer-events: none;
+        }
+
+        .layer-toggles {
+            border-bottom: 1px solid #ddd;
+            margin-bottom: 10px;
+            padding-bottom: 10px;
+        }
+
+        .layer-toggle-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 5px;
+        }
+
+        .layer-toggle-checkbox {
+            margin-right: 8px;
+        }
+
+        .layer-toggle-label {
+            font-size: 12px;
+            flex-grow: 1;
+            font-weight: 400;
+        }
+
+        .railroad-filters {
+            border-bottom: 1px solid #ddd;
+            margin-bottom: 10px;
+            padding-bottom: 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="map"></div>
+    <div id="map-overlay">
+        <div class="tap-instruction">Tap to interact with map</div>
+    </div>
+    <div id="legend">
+        <button id="ab-marker-btn">Add A/B Markers</button>
+        <button id="export-markers-btn">Export Markers</button>
+        <div class="marker-inputs" id="marker-inputs">
+            <div class="marker-input-group">
+                <label for="marker-a-text">Marker A</label>
+                <input type="text" id="marker-a-text" placeholder="Enter text for A" />
+            </div>
+            <div class="marker-input-group">
+                <label for="marker-b-text">Marker B</label>
+                <input type="text" id="marker-b-text" placeholder="Enter text for B" />
+            </div>
+        </div>
+        <button id="open-csv-btn">Open CSV</button>
+        <input type="file" id="csv-file-input" accept=".csv" style="display:none" />
+        <input type="text" id="company-search" placeholder="Filter by company name..." />
+        <div class="layer-toggles">
+            <div class="legend-title">Layer Visibility</div>
+            <div class="layer-toggle-item">
+                <input type="checkbox" class="layer-toggle-checkbox" id="toggle-rail" checked>
+                <label class="layer-toggle-label" for="toggle-rail">Rail Lines</label>
+            </div>
+            <div class="layer-toggle-item">
+                <input type="checkbox" class="layer-toggle-checkbox" id="toggle-sensors" checked>
+                <label class="layer-toggle-label" for="toggle-sensors">Sensors</label>
+            </div>
+            <div class="layer-toggle-item">
+                <input type="checkbox" class="layer-toggle-checkbox" id="toggle-facilities" checked>
+                <label class="layer-toggle-label" for="toggle-facilities">Facilities</label>
+            </div>
+        </div>
+        <div class="railroad-filters">
+            <div class="legend-title">Railroad Filters</div>
+            <div id="railroad-filters-container"></div>
+        </div>
+        <div id="legend-items"></div>
+    </div>
+    <script>
+        // Railroad configuration array
+        const railroads = [
+            { name: 'BNSF', color: '#FF7F11' },
+            { name: 'CN', color: '#B80000' },
+            { name: 'NS', color: '#3F3B3F' },
+            { name: 'CPKC', color: '#2E8A59' },
+            { name: 'CPRS', color: '#2E8A59' },
+            { name: 'CSXT', color: '#1F6DAD' },
+            { name: 'UP', color: '#E1BC29' }
+        ];
+
+        const appData = {
+            facilityFilters: [], // Will store selected railroad names
+            facilityColors: {},
+            facilityGeoJSON: [],
+            abMarkerMode: false,
+            markerA: null,
+            markerB: null,
+        }
+
+        const globalState = {
+            A: { lat: null, lng: null, text: '' },
+            B: { lat: null, lng: null, text: '' }
+        }
+
+        const lightStyle = 'mapbox://styles/mapbox/light-v11';
+        const satelliteStyle = 'mapbox://styles/mapbox/satellite-streets-v12';
+
+        mapboxgl.accessToken = 'pk.eyJ1IjoiZGV2b2VyYWlsc3RhdGUiLCJhIjoiY2wxNnZ1ejR0MDl2YjNicXNjd3R2dGx5ZCJ9.Y4aChG8-UtF_4FOQZF8R2Q';
+        const map = new mapboxgl.Map({
+            container: 'map',
+            style: 'mapbox://styles/mapbox/light-v11',
+            zoom: 3,
+            center: { lng: -102.44106443015511, lat: 39.671600770516164 },
+            projection: 'mercator',
+            cooperativeGestures: true
+        });
+
+        // Generate railroad filters dynamically
+        function generateRailroadFilters() {
+            const container = document.getElementById('railroad-filters-container');
+            container.innerHTML = '';
+
+            railroads.forEach(railroad => {
+                const legendItem = document.createElement('div');
+                legendItem.className = 'legend-item';
+
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.className = 'facility-checkbox railroad-checkbox';
+                checkbox.id = `filter-${railroad.name}`;
+                checkbox.checked = true;
+                checkbox.addEventListener('change', filterRailroads);
+
+                const colorCircle = document.createElement('span');
+                colorCircle.className = 'color-circle';
+                colorCircle.style.backgroundColor = railroad.color;
+
+                const label = document.createElement('label');
+                label.className = 'facility-label';
+                label.htmlFor = checkbox.id;
+                label.textContent = railroad.name;
+
+                legendItem.appendChild(checkbox);
+                legendItem.appendChild(colorCircle);
+                legendItem.appendChild(label);
+
+                container.appendChild(legendItem);
+            });
+
+            // Initialize facilityFilters with all railroads
+            appData.facilityFilters = railroads.map(r => r.name);
+        }
+
+        function updateGlobalState() {
+            console.log('Global State:', globalState);
+        }
+
+        function downloadCSV() {
+            const rows = [
+                ['name', 'lat', 'lng', 'text'],
+                ['A', globalState.A.lat || '', globalState.A.lng || '', globalState.A.text || ''],
+                ['B', globalState.B.lat || '', globalState.B.lng || '', globalState.B.text || '']
+            ];
+
+            const csvContent = rows.map(row =>
+                row.map(cell => {
+                    const cellStr = String(cell);
+                    if (cellStr.includes(',') || cellStr.includes('"') || cellStr.includes('\n')) {
+                        return `"${cellStr.replace(/"/g, '""')}"`;
+                    }
+                    return cellStr;
+                }).join(',')
+            ).join('\n');
+
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+            link.setAttribute('href', url);
+            link.setAttribute('download', 'markers.csv');
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        function filterRailroads() {
+            const selectedRailroads = [];
+            document.querySelectorAll('.railroad-checkbox').forEach(checkbox => {
+                if (checkbox.checked) {
+                    const railroad = checkbox.id.replace('filter-', '');
+                    selectedRailroads.push(railroad);
+                }
+            });
+
+            // Update appData.facilityFilters with selected railroads
+            appData.facilityFilters = selectedRailroads;
+            console.log('Selected Railroads:', appData.facilityFilters);
+
+            // Filter rail lines
+            if (selectedRailroads.length === 0) {
+                map.setFilter('rail-data', ['==', 'RROWNER1', '']);
+                map.setFilter('rail-data-2', ['==', 'RROWNER1', '']);
+            } else {
+                const filter = ['in', ['get', 'RROWNER1'], ['literal', selectedRailroads]];
+                map.setFilter('rail-data', filter);
+                map.setFilter('rail-data-2', filter);
+            }
+
+            // Also filter facilities by selected railroads
+            filterFacilities();
+        }
+
+        function generateLegend(colorsFromCSV) {
+            console.log(colorsFromCSV);
+            const legendContainer = document.getElementById('legend-items');
+            legendContainer.innerHTML = '';
+
+            // This function is for facility type filters, not railroad filters
+            // Currently empty as filters array is empty
+        }
+
+        function filterFacilities(searchText) {
+            if (searchText === undefined) {
+                searchText = document.getElementById('company-search').value;
+            }
+
+            const selectedRailroads = appData.facilityFilters;
+
+            // If no railroads are selected, show no facilities
+            if (selectedRailroads.length === 0) {
+                map.getSource('facilities').setData({
+                    type: 'FeatureCollection',
+                    features: []
+                });
+                return;
+            }
+
+            // Filter by both railroad and company search text
+            const filtered = appData.facilityGeoJSON.filter(item => {
+                // Check if company name matches search text
+                const matchesSearchText = !searchText ||
+                    (item.properties['Company'] &&
+                        item.properties['Company'].toLowerCase().includes(searchText.toLowerCase()));
+
+                // Check if railroad matches selected railroads
+                const facilityRailroad = item.properties['Railroad'];
+                const matchesRailroad = selectedRailroads.includes(facilityRailroad);
+
+                // Both conditions must be true
+                return matchesSearchText && matchesRailroad;
+            });
+
+            map.getSource('facilities').setData({
+                type: 'FeatureCollection',
+                features: filtered
+            });
+        }
+
+        function createPinMarker(letter, color) {
+            const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 30 50" width="30" height="50">
+                <path d="M15 0C8.4 0 3 5.4 3 12c0 8 12 38 12 38s12-30 12-38c0-6.6-5.4-12-12-12z" fill="${color}" stroke="white" stroke-width="2"/>
+                <text x="15" y="14" text-anchor="middle" dy="0.3em" font-size="16" font-weight="bold" fill="white" font-family="Arial">${letter}</text>
+            </svg>`;
+
+            const el = document.createElement('div');
+            el.innerHTML = svg;
+            el.style.cursor = 'grab';
+            return el.firstChild;
+        }
+
+        function addABMarker(lngLat) {
+            if (!appData.abMarkerMode) return;
+
+            if (!appData.markerA) {
+                const el = createPinMarker('A', '#4285F4');
+                appData.markerA = new mapboxgl.Marker({
+                    element: el,
+                    draggable: true,
+                    anchor: 'bottom'
+                })
+                    .setLngLat(lngLat)
+                    .addTo(map);
+
+                globalState.A.lat = lngLat.lat;
+                globalState.A.lng = lngLat.lng;
+
+                appData.markerA.on('dragend', () => {
+                    const lngLat = appData.markerA.getLngLat();
+                    globalState.A.lat = lngLat.lat;
+                    globalState.A.lng = lngLat.lng;
+                    updateGlobalState();
+                });
+
+                updateGlobalState();
+            } else if (!appData.markerB) {
+                const el = createPinMarker('B', '#EA4335');
+                appData.markerB = new mapboxgl.Marker({
+                    element: el,
+                    draggable: true,
+                    anchor: 'bottom'
+                })
+                    .setLngLat(lngLat)
+                    .addTo(map);
+
+                globalState.B.lat = lngLat.lat;
+                globalState.B.lng = lngLat.lng;
+
+                appData.markerB.on('dragend', () => {
+                    const lngLat = appData.markerB.getLngLat();
+                    globalState.B.lat = lngLat.lat;
+                    globalState.B.lng = lngLat.lng;
+                    updateGlobalState();
+                });
+
+                updateGlobalState();
+            }
+        }
+
+        function clearABMarkers() {
+            if (appData.markerA) {
+                appData.markerA.remove();
+                appData.markerA = null;
+            }
+            if (appData.markerB) {
+                appData.markerB.remove();
+                appData.markerB = null;
+            }
+            globalState.A = { lat: null, lng: null, text: '' };
+            globalState.B = { lat: null, lng: null, text: '' };
+            document.getElementById('marker-a-text').value = '';
+            document.getElementById('marker-b-text').value = '';
+        }
+
+        // Generate railroad filters on page load
+        generateRailroadFilters();
+
+        map.on('load', () => {
+            const popup = new mapboxgl.Popup({
+                closeButton: true,
+                closeOnClick: true,
+                maxWidth: '300px'
+            });
+
+            d3.csv("https://docs.google.com/spreadsheets/d/e/2PACX-1vTET61Cfrm5ALqSSBwTMGiiV7XhZP8Ufe2CJV8chBgv2Le14cy6WQmHLoNj2jQHlChZJbgeq26Z87SW/pub?output=csv")
+                .then(function (data) {
+                    console.log(data);
+                    const colorsFromCSV = new Map();
+                    const filters = []
+                    const features = data
+                        .filter(code => code.Latitude && code.Longitude)
+                        .map(code => {
+                            return {
+                                type: 'Feature',
+                                properties: {
+                                    ...code
+                                },
+                                geometry: {
+                                    type: 'Point',
+                                    coordinates: [parseFloat(code.Longitude), parseFloat(code.Latitude)]
+                                }
+                            };
+                        });
+                    console.log('features', features);
+
+                    appData.facilityGeoJSON = features;
+
+                    map.getSource('facilities').setData({
+                        type: 'FeatureCollection',
+                        features: features
+                    });
+
+                    // Apply initial filter based on selected railroads
+                    filterFacilities();
+
+                    const displayFields = [
+                        { key: 'Site Name', label: 'Site Name' },
+                        { key: 'Railroad', label: 'Railroad' },
+                        { key: 'Trackage Rights', label: 'Trackage Rights' },
+                        { key: 'Subdivision', label: 'Subdivision' },
+                        { key: 'Traffic Coverage', label: 'Traffic Coverage' }
+                    ];
+
+                    map.on('click', 'facilities', (e) => {
+
+                        const subdivisions = getSubdivision(e)
+
+                        const coordinates = e.features[0].geometry.coordinates.slice();
+                        const properties = e.features[0].properties;
+
+                        let popupContent = `
+                            <div style="font-family: 'Poppins', sans-serif; padding: 5px;">
+                            <h3 style="margin-top: 0; margin-bottom: 10px; color: #333; font-size: 16px; border-bottom: 1px solid #eee; padding-bottom: 5px;">
+                                ${properties['Site Name'] || 'Unknown'}
+                            </h3>
+                        `;
+
+                        displayFields.forEach(field => {
+                            popupContent += properties[field.key] !== "" ? `
+                            <div style="margin-bottom: 5px;">
+                                <strong style="color: #555; font-size: 13px;">${field.label}:</strong> 
+                                <span style="font-size: 13px;">${properties[field.key]}</span>
+                            </div> 
+                            ` : ``;
+                        });
+
+                        const subDivs = properties['Subdivision'].length > 1 ? properties['Subdivision'] : subdivisions.join(', ');
+                        popupContent += `
+                            <div style="margin-bottom: 5px;">
+                                <strong style="color: #555; font-size: 13px;">Subdivision:</strong> 
+                                <span style="font-size: 13px;">${subDivs}</span>
+                            </div>`;
+
+                        popupContent += `</div>`;
+
+                        while (Math.abs(e.lngLat.lng - coordinates[0]) > 180) {
+                            coordinates[0] += e.lngLat.lng > coordinates[0] ? 360 : -360;
+                        }
+
+                        popup.setLngLat(coordinates)
+                            .setHTML(popupContent)
+                            .addTo(map);
+                    });
+
+                    map.on('mouseenter', 'facilities', () => {
+                        map.getCanvas().style.cursor = 'pointer';
+                    });
+
+                    map.on('mouseleave', 'facilities', () => {
+                        map.getCanvas().style.cursor = '';
+                    });
+
+                    generateLegend(colorsFromCSV);
+
+
+                });
+
+            function getSubdivision(e) {
+                // Convert click point to Turf.js format
+                const clickPoint = turf.point([e.lngLat.lng, e.lngLat.lat]);
+
+                // Use larger bbox for better detection - scale with zoom
+                // const zoomLevel = map.getZoom();
+                // const bboxSize = Math.max(10, 100 / Math.pow(2, zoomLevel - 10));
+                const zoomLevel = map.getZoom();
+                const bboxSize = Math.max(50, Math.min(400, 50 + (zoomLevel - 10) * 50));
+
+                const bbox = [
+                    [e.point.x - bboxSize, e.point.y - bboxSize],
+                    [e.point.x + bboxSize, e.point.y + bboxSize]
+                ];
+
+                // Query rail features from both layers
+                const railFeatures = map.queryRenderedFeatures(bbox, {
+                    layers: ['rail-data', 'rail-data-2']
+                });
+
+                console.log('Rail features found:', railFeatures);
+
+                if (railFeatures.length === 0) {
+                    console.log('No rail features found');
+                    return [];
+                }
+
+                // Find closest line to click point using Turf.js
+                let closestFeature = null;
+                let closestDistance = Infinity;
+
+                railFeatures.forEach(feature => {
+                    try {
+                        if (feature.geometry.type === 'LineString' || feature.geometry.type === 'MultiLineString') {
+                            // Find nearest point on this line
+                            const nearestPt = turf.nearestPointOnLine(feature, clickPoint);
+                            const distance = nearestPt.properties.dist;
+
+                            //console.log('Distance to line:', distance, 'km');
+
+                            if (distance < closestDistance) {
+                                closestDistance = distance;
+                                closestFeature = feature;
+                            }
+                        }
+                    } catch (error) {
+                        console.error('Error processing feature:', error);
+                    }
+                });
+
+                // Extract subdivisions from closest feature
+                const SUBDIV = new Set();
+                if (closestFeature) {
+                    console.log('Closest feature properties:', closestFeature.properties);
+                    console.log('Closest distance:', closestDistance, 'km');
+
+                    if (closestFeature.properties['SUBDIV']) {
+                        SUBDIV.add(closestFeature.properties['SUBDIV']);
+                    }
+
+                    // Add additional properties for debugging
+                    console.log('Layer:', closestFeature.layer.id);
+                    console.log('RROWNER1:', closestFeature.properties['RROWNER1']);
+                } else {
+                    console.log('No suitable rail line found');
+                }
+
+                return [...SUBDIV];
+            }
+
+
+            d3.csv("https://docs.google.com/spreadsheets/d/e/2PACX-1vRb3b2jMVWa5Zi5_cLYJIhkC1sZP2T1FAH8yVwuN0egPLEsOI7HwMn7Tp8KtAqI0eGJnfgG-jz-LtRx/pub?output=csv")
+                .then(function (data) {
+                    console.log(data);
+
+                    const features = data
+                        .filter(code => code.Latitude && code.Longitude)
+                        .map(code => {
+                            return {
+                                type: 'Feature',
+                                properties: {
+                                    name: code['Sensor Name'],
+                                },
+                                geometry: {
+                                    type: 'Point',
+                                    coordinates: [parseFloat(code.Longitude), parseFloat(code.Latitude)]
+                                }
+                            };
+                        });
+                    console.log('features', features);
+                    map.getSource('sensors').setData({
+                        type: 'FeatureCollection',
+                        features: features
+                    });
+                });
+
+            map.addSource('rail', {
+                type: 'vector',
+                url: 'mapbox://devoerailstate.cvm6ll9k'
+            });
+            map.addLayer({
+                'id': 'rail-data',
+                'type': 'line',
+                'source': 'rail',
+                'source-layer': 'North_American_Rail_Network_Lines',
+                'layout': {
+                    'line-join': 'round',
+                    'line-cap': 'round'
+                },
+                'paint': {
+                    'line-color': [
+                        'match',
+                        ['get', 'RROWNER1'],
+                        "BNSF", "#FF7F11",
+                        "CN", "#B80000",
+                        "NS", "#3F3B3F",
+                        "CPKC", "#2E8A59",
+                        "CPRS", "#2E8A59",
+                        "CSXT", "#1F6DAD",
+                        "UP", "#E1BC29",
+                        '#ccc'
+                    ],
+                    'line-width': [
+                        'interpolate',
+                        ['linear'],
+                        ['zoom'],
+                        0, 0.5,
+                        4, 1,
+                        8, 4,
+                        12, 12,
+                        22, 13
+                    ]
+                }
+            }, 'road-label-simple');
+
+            map.addSource('rail2', {
+                type: 'vector',
+                url: 'mapbox://devoerailstate.23t98xmy'
+            });
+            map.addLayer({
+                'id': 'rail-data-2',
+                'type': 'line',
+                'source': 'rail2',
+                'source-layer': 'NTAD',
+                'layout': {
+                    'line-join': 'round',
+                    'line-cap': 'round'
+                },
+                'paint': {
+                    'line-color': [
+                        'match',
+                        ['get', 'RROWNER1'],
+                        "BNSF", "#FF7F11",
+                        "CN", "#B80000",
+                        "NS", "#3F3B3F",
+                        "CPKC", "#2E8A59",
+                        "CPRS", "#2E8A59",
+                        "CSXT", "#1F6DAD",
+                        "UP", "#E1BC29",
+                        '#ccc'
+                    ],
+                    'line-width': [
+                        'interpolate',
+                        ['linear'],
+                        ['zoom'],
+                        0, 0.5,
+                        4, 1,
+                        8, 4,
+                        12, 12,
+                        22, 13
+                    ]
+                }
+            }, 'road-label-simple');
+
+            map.addSource('satellite', {
+                type: 'raster',
+                tiles: ['https://api.mapbox.com/styles/v1/mapbox/satellite-streets-v12/tiles/{z}/{x}/{y}?access_token=' + mapboxgl.accessToken],
+                tileSize: 256
+            });
+            map.addLayer({
+                id: 'satellite-layer',
+                type: 'raster',
+                source: 'satellite',
+                layout: {
+                    visibility: 'none'
+                },
+                minzoom: 0,
+                maxzoom: 22
+            }, 'rail-data');
+
+            map.on('zoom', () => {
+                map.getZoom() < 12 ? map.setLayoutProperty('satellite-layer', 'visibility', 'none') : map.setLayoutProperty('satellite-layer', 'visibility', 'visible');
+            });
+
+            // Helper function to generate rail popup content
+            function generateRailPopup(properties) {
+                const name = properties['SUBDIV'] || properties['BRANCH'] || properties['RROWNER1'] || 'Unknown';
+
+                const fields = [
+                    { label: 'Subdivision', value: properties['SUBDIV'] },
+                    { label: 'Railroad', value: properties['RROWNER1'] },
+                    { label: 'State', value: properties['STATEAB'] },
+                    { label: 'Distance (km)', value: properties['KM'] ? parseFloat(properties['KM']).toFixed(3) : 'N/A' }
+                ];
+
+                const fieldHTML = fields
+                    .filter(field => field.value)
+                    .map(field => `
+                            <div style="margin-bottom: 5px;">
+                                <strong style="color: #555; font-size: 13px;">${field.label}:</strong> 
+                                <span style="font-size: 13px;">${field.value}</span>
+                            </div>
+                        `)
+                    .join('');
+
+                return `
+                    <div style="font-family: 'Poppins', sans-serif; padding: 8px;">
+                        <h3 style="margin: 0 0 10px 0; color: #333; font-size: 16px; border-bottom: 1px solid #eee; padding-bottom: 5px;">
+                            ${name}
+                        </h3>
+                        ${fieldHTML}
+                    </div>
+                `;
+            }
+
+            // Popup for both rail layers
+            ['rail-data', 'rail-data-2'].forEach(layerId => {
+                map.on('click', layerId, (e) => {
+                    popup.setLngLat(e.lngLat)
+                        .setHTML(generateRailPopup(e.features[0].properties))
+                        .addTo(map);
+                });
+
+                map.on('mouseenter', layerId, () => {
+                    map.getCanvas().style.cursor = 'pointer';
+                });
+
+                map.on('mouseleave', layerId, () => {
+                    map.getCanvas().style.cursor = '';
+                });
+            });
+
+
+            map.addSource('csv-points', {
+                type: 'geojson',
+                data: {
+                    type: 'FeatureCollection',
+                    features: []
+                }
+            });
+            map.addLayer({
+                id: 'csv-points-layer',
+                type: 'circle',
+                source: 'csv-points',
+                paint: {
+                    'circle-radius': 8,
+                    'circle-color': '#000000',
+                    'circle-opacity': 0.9,
+                    'circle-stroke-width': 1,
+                    'circle-stroke-color': '#fff'
+                }
+            });
+
+            map.addSource('sensors', {
+                type: 'geojson',
+                data: {
+                    type: 'FeatureCollection',
+                    features: []
+                }
+            });
+            map.addLayer({
+                id: 'sensors-layer',
+                type: 'circle',
+                source: 'sensors',
+                paint: {
+                    'circle-radius': 6,
+                    'circle-color': '#0452BE',
+                    'circle-opacity': 0.9,
+                    'circle-stroke-width': 1,
+                    'circle-stroke-color': '#fff'
+                }
+            });
+            map.addLayer({
+                id: 'sensors-label',
+                type: 'symbol',
+                source: 'sensors',
+                layout: {
+                    'text-field': ['get', 'name'],
+                    'text-font': ['DIN Offc Pro Medium', 'Arial Unicode MS Regular'],
+                    'text-size': 12,
+                    'text-offset': [0, 1.5],
+                    'text-anchor': 'top'
+                },
+                paint: {
+                    'text-color': '#000000',
+                    'text-halo-color': '#FFFFFF',
+                    'text-halo-width': 1
+                }
+            });
+
+            map.addSource('facilities', {
+                type: 'geojson',
+                data: {
+                    type: 'FeatureCollection',
+                    features: []
+                }
+            });
+            map.addLayer({
+                id: 'facilities',
+                type: 'circle',
+                source: 'facilities',
+                paint: {
+                    'circle-radius': 5,
+                    'circle-color': '#FF0000',
+                    'circle-opacity': 0.8,
+                    'circle-stroke-width': 1,
+                    'circle-stroke-color': '#FFFFFF'
+                }
+            });
+
+            document.getElementById('company-search').addEventListener('input', (e) => {
+                filterFacilities(e.target.value);
+            });
+
+            document.getElementById('toggle-rail').addEventListener('change', function (e) {
+                const visibility = e.target.checked ? 'visible' : 'none';
+                map.setLayoutProperty('rail-data', 'visibility', visibility);
+                map.setLayoutProperty('rail-data-2', 'visibility', visibility);
+            });
+
+            document.getElementById('toggle-sensors').addEventListener('change', function (e) {
+                const visibility = e.target.checked ? 'visible' : 'none';
+                map.setLayoutProperty('sensors-layer', 'visibility', visibility);
+                map.setLayoutProperty('sensors-label', 'visibility', visibility);
+            });
+
+            document.getElementById('toggle-facilities').addEventListener('change', function (e) {
+                const visibility = e.target.checked ? 'visible' : 'none';
+                map.setLayoutProperty('facilities', 'visibility', visibility);
+            });
+
+            document.getElementById('ab-marker-btn').addEventListener('click', function (e) {
+                appData.abMarkerMode = !appData.abMarkerMode;
+                e.target.classList.toggle('active');
+                document.getElementById('marker-inputs').classList.toggle('active');
+                document.getElementById('export-markers-btn').classList.toggle('active');
+                if (!appData.abMarkerMode) {
+                    clearABMarkers();
+                }
+            });
+
+            document.getElementById('marker-a-text').addEventListener('input', function (e) {
+                globalState.A.text = e.target.value;
+                updateGlobalState();
+            });
+
+            document.getElementById('marker-b-text').addEventListener('input', function (e) {
+                globalState.B.text = e.target.value;
+                updateGlobalState();
+            });
+
+            document.getElementById('export-markers-btn').addEventListener('click', function () {
+                downloadCSV();
+            });
+
+            map.on('click', function (e) {
+                if (appData.abMarkerMode && (!appData.markerA || !appData.markerB)) {
+                    addABMarker(e.lngLat);
+                }
+            });
+
+            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+            const mapContainer = document.getElementById('map');
+            const mapOverlay = document.getElementById('map-overlay');
+
+            if (isMobile) {
+                mapOverlay.style.display = 'block';
+                map.scrollZoom.disable();
+                map.dragPan.disable();
+                map.touchZoomRotate.disable();
+
+                mapOverlay.addEventListener('click', function () {
+                    mapContainer.classList.add('map-active');
+                    map.scrollZoom.enable();
+                    map.dragPan.enable();
+                    map.touchZoomRotate.enable();
+                    mapOverlay.style.display = 'none';
+                    document.addEventListener('touchstart', checkIfOutsideMap);
+                });
+
+                function checkIfOutsideMap(e) {
+                    if (!mapContainer.contains(e.target) || e.target.id === 'legend' || e.target.closest('#legend')) {
+                        mapContainer.classList.remove('map-active');
+                        map.scrollZoom.disable();
+                        map.dragPan.disable();
+                        map.touchZoomRotate.disable();
+                        mapOverlay.style.display = 'block';
+                        document.removeEventListener('touchstart', checkIfOutsideMap);
+                    }
+                }
+            }
+        });
+
+        document.getElementById('open-csv-btn').addEventListener('click', function () {
+            document.getElementById('csv-file-input').click();
+        });
+
+        document.getElementById('csv-file-input').addEventListener('change', function (evt) {
+            const file = evt.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function (e) {
+                const csvText = e.target.result;
+                const data = d3.csvParse(csvText);
+                const features = data
+                    .filter(row => row.latitude && row.longitude)
+                    .map(row => ({
+                        type: 'Feature',
+                        properties: { ...row },
+                        geometry: {
+                            type: 'Point',
+                            coordinates: [parseFloat(row.longitude), parseFloat(row.latitude)]
+                        }
+                    }));
+                if (map.getSource('csv-points')) {
+                    console.log('features', features);
+                    map.getSource('csv-points').setData({
+                        type: 'FeatureCollection',
+                        features: features
+                    });
+                }
+            };
+            reader.readAsText(file);
+            evt.target.value = '';
+        });
+    </script>
+</body>
+
+</html>
