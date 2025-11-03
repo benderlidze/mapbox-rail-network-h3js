@@ -394,15 +394,13 @@
 
             groupDiv.innerHTML = `
                 <div class="marker-group-header">
-                    <div class="marker-group-title">Group ${group.id}</div>
+                    <div class="marker-group-title">Group A/B ${group.id}</div>
                     <button class="delete-group-btn" onclick="deleteMarkerGroup(${group.id})">Delete</button>
                 </div>
                 <div class="marker-input-group">
-                    <label for="marker-a${group.id}-text">Marker A${group.id}</label>
                     <input type="text" id="marker-a${group.id}-text" placeholder="Enter text for A${group.id}" />
                 </div>
                 <div class="marker-input-group">
-                    <label for="marker-b${group.id}-text">Marker B${group.id}</label>
                     <input type="text" id="marker-b${group.id}-text" placeholder="Enter text for B${group.id}" />
                 </div>
             `;
