@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="utf-8">
-    <title>Add a vector tile source</title>
+    <title>Export</title>
     <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
 
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -842,12 +842,13 @@
             // Helper function to generate rail popup content
             function generateRailPopup(properties) {
                 const name = properties['SUBDIV'] || properties['BRANCH'] || properties['RROWNER1'] || 'Unknown';
-
                 const fields = [
+                    { label: 'Name', value: properties['TRACKS'] },
                     { label: 'Subdivision', value: properties['SUBDIV'] },
                     { label: 'Railroad', value: properties['RROWNER1'] },
                     { label: 'State', value: properties['STATEAB'] },
-                    { label: 'Distance (km)', value: properties['KM'] ? parseFloat(properties['KM']).toFixed(3) : 'N/A' }
+                    { label: 'Distance (km)', value: properties['KM'] ? parseFloat(properties['KM']).toFixed(3) : 'N/A' },
+                    { label: 'YARDNAME', value: properties['YARDNAME'] ? properties['YARDNAME'] : 'N/A' }
                 ];
 
                 const fieldHTML = fields
