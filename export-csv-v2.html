@@ -2,21 +2,19 @@
 <html>
 
 <head>
-    <meta charset="utf-8">
+    <meta charset='utf-8' />
     <title>Export</title>
-    <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
-
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet">
-    <link href="https://api.mapbox.com/mapbox-gl-js/v3.10.0/mapbox-gl.css" rel="stylesheet">
-    <script src="https://api.mapbox.com/mapbox-gl-js/v3.10.0/mapbox-gl.js"></script>
-    <script src="https://d3js.org/d3.v7.min.js"></script>
-    <script src="https://unpkg.com/@turf/turf@7.2.0/turf.min.js"></script>
-
+    <meta name='viewport' content='initial-scale=1,maximum-scale=1,user-scalable=no' />
+    <link href='https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap' rel='stylesheet' />
+    <link href='https://api.mapbox.com/mapbox-gl-js/v3.10.0/mapbox-gl.css' rel='stylesheet' />
+    <script src='https://api.mapbox.com/mapbox-gl-js/v3.10.0/mapbox-gl.js'></script>
+    <script src='https://d3js.org/d3.v7.min.js'></script>
+    <script src='https://unpkg.com/turf@7/turf.min.js'></script>
     <style>
         body {
             margin: 0;
             padding: 0;
-            font-family: 'Poppins', sans-serif;
+            font-family: Poppins, sans-serif;
         }
 
         #map {
@@ -39,7 +37,7 @@
             width: 250px;
             box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
             z-index: 1;
-            font-family: 'Poppins', sans-serif;
+            font-family: Poppins, sans-serif;
         }
 
         .legend-title {
@@ -57,70 +55,27 @@
         }
 
         .color-circle {
-            width: 15px;
-            height: 15px;
+            width: 12px;
+            height: 12px;
             border-radius: 50%;
-            margin-right: 10px;
-            border: 1px solid #ccc;
+            margin-right: 8px;
         }
 
         .facility-label {
             font-size: 12px;
-            flex-grow: 1;
-            font-weight: 300;
+            cursor: pointer;
         }
 
         .facility-checkbox {
-            margin-right: 8px;
+            margin-right: 5px;
         }
 
-        #open-csv-btn {
-            display: block;
+        button {
             width: 100%;
-            margin-bottom: 10px;
-            padding: 6px 0;
-            font-size: 13px;
-            font-family: 'Poppins', sans-serif;
-            background: #222;
-            color: #fff;
-            border: none;
-            border-radius: 3px;
-            cursor: pointer;
-        }
-
-        #open-csv-btn:hover {
-            background: #444;
-        }
-
-        #ab-marker-btn {
-            display: block;
-            width: 100%;
-            margin-bottom: 10px;
-            padding: 6px 0;
-            font-size: 13px;
-            font-family: 'Poppins', sans-serif;
-            background: #666;
-            color: #fff;
-            border: none;
-            border-radius: 3px;
-            cursor: pointer;
-        }
-
-        #ab-marker-btn:hover {
-            background: #888;
-        }
-
-        #ab-marker-btn.active {
-            background: #2ecc71;
-        }
-
-        #export-markers-btn {
-            display: none;
-            width: 100%;
-            margin-bottom: 10px;
-            padding: 6px 0;
-            font-size: 13px;
-            font-family: 'Poppins', sans-serif;
+            padding: 8px;
+            margin-bottom: 8px;
+            font-size: 12px;
+            font-family: Poppins, sans-serif;
             background: #3498db;
             color: #fff;
             border: none;
@@ -128,20 +83,28 @@
             cursor: pointer;
         }
 
-        #export-markers-btn:hover {
+        button:hover {
             background: #2980b9;
         }
 
-        #export-markers-btn.active {
-            display: block;
+        button.active {
+            background: #e74c3c;
+        }
+
+        #export-markers-btn {
+            background: #27ae60;
+        }
+
+        #export-markers-btn:hover {
+            background: #229954;
         }
 
         .marker-inputs {
             display: none;
-            margin-bottom: 10px;
-            padding: 10px;
-            background: #f5f5f5;
+            background: #f9f9f9;
+            padding: 8px;
             border-radius: 3px;
+            margin-bottom: 8px;
         }
 
         .marker-inputs.active {
@@ -155,70 +118,65 @@
         .marker-input-group label {
             display: block;
             font-size: 12px;
-            font-weight: 500;
+            color: #666;
             margin-bottom: 3px;
-            color: #333;
         }
 
         .marker-input-group input {
             width: 100%;
             padding: 6px;
+            border: 1px solid #ccc;
+            border-radius: 3px;
             font-size: 12px;
-            border: 1px solid #ddd;
-            border-radius: 3px;
-            font-family: 'Poppins', sans-serif;
             box-sizing: border-box;
         }
 
-        /* Search input styles */
-        #company-search {
-            width: 100%;
+        .marker-groups-container {
+            margin: 10px 0;
+            background: #f9f9f9;
             padding: 8px;
-            margin-bottom: 10px;
+            border-radius: 3px;
+        }
+
+        .marker-group {
+            background: #fff;
             border: 1px solid #ddd;
             border-radius: 3px;
-            font-family: 'Poppins', sans-serif;
+            padding: 8px;
+            margin-bottom: 8px;
+        }
+
+        .marker-group-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .marker-group-title {
+            font-weight: bold;
             font-size: 13px;
-            box-sizing: border-box;
+            color: #333;
         }
 
-        #company-search::placeholder {
-            color: #999;
-        }
-
-        /* Map overlay to control touch events */
-        #map-overlay {
-            position: absolute;
-            top: 0;
-            bottom: 0;
-            width: 100%;
-            background: transparent;
-            z-index: 10;
-            display: none;
-        }
-
-        .map-active #map-overlay {
-            display: none;
-        }
-
-        /* Message shown on map overlay */
-        .tap-instruction {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: rgba(0, 0, 0, 0.7);
+        .delete-group-btn {
+            background: #dc3545;
             color: white;
-            padding: 10px 15px;
-            border-radius: 20px;
-            font-size: 14px;
-            pointer-events: none;
+            border: none;
+            padding: 3px 6px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 11px;
+            width: auto;
+            margin: 0;
+        }
+
+        .delete-group-btn:hover {
+            background: #c82333;
         }
 
         .layer-toggles {
-            border-bottom: 1px solid #ddd;
-            margin-bottom: 10px;
-            padding-bottom: 10px;
+            margin-top: 10px;
         }
 
         .layer-toggle-item {
@@ -228,19 +186,43 @@
         }
 
         .layer-toggle-checkbox {
-            margin-right: 8px;
+            margin-right: 5px;
         }
 
         .layer-toggle-label {
             font-size: 12px;
-            flex-grow: 1;
-            font-weight: 400;
+            cursor: pointer;
         }
 
         .railroad-filters {
-            border-bottom: 1px solid #ddd;
-            margin-bottom: 10px;
-            padding-bottom: 10px;
+            margin-top: 10px;
+        }
+
+        #map-overlay {
+            display: none;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 2;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #map-overlay.active {
+            display: flex;
+        }
+
+        .tap-instruction {
+            color: white;
+            font-size: 18px;
+            text-align: center;
+        }
+
+        #map.map-active {
+            z-index: 3;
         }
     </style>
 </head>
@@ -251,18 +233,9 @@
         <div class="tap-instruction">Tap to interact with map</div>
     </div>
     <div id="legend">
-        <button id="ab-marker-btn">Add A/B Markers</button>
+        <button id="ab-marker-btn">Add A/B Marker Group</button>
         <button id="export-markers-btn">Export Markers</button>
-        <div class="marker-inputs" id="marker-inputs">
-            <div class="marker-input-group">
-                <label for="marker-a-text">Marker A</label>
-                <input type="text" id="marker-a-text" placeholder="Enter text for A" />
-            </div>
-            <div class="marker-input-group">
-                <label for="marker-b-text">Marker B</label>
-                <input type="text" id="marker-b-text" placeholder="Enter text for B" />
-            </div>
-        </div>
+        <div class="marker-groups-container" id="marker-groups-container"></div>
         <button id="open-csv-btn">Open CSV</button>
         <input type="file" id="csv-file-input" accept=".csv" style="display:none" />
         <input type="text" id="company-search" placeholder="Filter by company name..." />
@@ -287,6 +260,7 @@
         </div>
         <div id="legend-items"></div>
     </div>
+
     <script>
         // Railroad configuration array
         const railroads = [
@@ -300,18 +274,13 @@
         ];
 
         const appData = {
-            facilityFilters: [], // Will store selected railroad names
+            facilityFilters: [],
             facilityColors: {},
             facilityGeoJSON: [],
-            abMarkerMode: false,
-            markerA: null,
-            markerB: null,
+            markerGroups: []
         }
 
-        const globalState = {
-            A: { lat: null, lng: null, text: '' },
-            B: { lat: null, lng: null, text: '' }
-        }
+        let markerGroupCounter = 0;
 
         const lightStyle = 'mapbox://styles/mapbox/light-v11';
         const satelliteStyle = 'mapbox://styles/mapbox/satellite-streets-v12';
@@ -358,20 +327,103 @@
                 container.appendChild(legendItem);
             });
 
-            // Initialize facilityFilters with all railroads
             appData.facilityFilters = railroads.map(r => r.name);
         }
 
-        function updateGlobalState() {
-            console.log('Global State:', globalState);
+        function createMarkerGroup() {
+            markerGroupCounter++;
+            const groupId = markerGroupCounter;
+
+            const group = {
+                id: groupId,
+                markerA: null,
+                markerB: null,
+                data: {
+                    A: { lat: null, lng: null, text: '' },
+                    B: { lat: null, lng: null, text: '' }
+                },
+                isActive: true,
+                hasA: false,
+                hasB: false
+            };
+
+            appData.markerGroups.push(group);
+            renderMarkerGroupUI(group);
+
+            return group;
+        }
+
+        function renderMarkerGroupUI(group) {
+            const container = document.getElementById('marker-groups-container');
+
+            const groupDiv = document.createElement('div');
+            groupDiv.className = 'marker-group';
+            groupDiv.id = `marker-group-${group.id}`;
+
+            groupDiv.innerHTML = `
+                <div class="marker-group-header">
+                    <div class="marker-group-title">Group ${group.id}</div>
+                    <button class="delete-group-btn" onclick="deleteMarkerGroup(${group.id})">Delete</button>
+                </div>
+                <div class="marker-input-group">
+                    <label for="marker-a${group.id}-text">Marker A${group.id}</label>
+                    <input type="text" id="marker-a${group.id}-text" placeholder="Enter text for A${group.id}" />
+                </div>
+                <div class="marker-input-group">
+                    <label for="marker-b${group.id}-text">Marker B${group.id}</label>
+                    <input type="text" id="marker-b${group.id}-text" placeholder="Enter text for B${group.id}" />
+                </div>
+            `;
+
+            container.appendChild(groupDiv);
+
+            document.getElementById(`marker-a${group.id}-text`).addEventListener('input', (e) => {
+                group.data.A.text = e.target.value;
+            });
+
+            document.getElementById(`marker-b${group.id}-text`).addEventListener('input', (e) => {
+                group.data.B.text = e.target.value;
+            });
+        }
+
+        function deleteMarkerGroup(groupId) {
+            const groupIndex = appData.markerGroups.findIndex(g => g.id === groupId);
+            if (groupIndex === -1) return;
+
+            const group = appData.markerGroups[groupIndex];
+
+            if (group.markerA) {
+                group.markerA.remove();
+            }
+            if (group.markerB) {
+                group.markerB.remove();
+            }
+
+            appData.markerGroups.splice(groupIndex, 1);
+
+            const groupDiv = document.getElementById(`marker-group-${groupId}`);
+            if (groupDiv) {
+                groupDiv.remove();
+            }
         }
 
         function downloadCSV() {
-            const rows = [
-                ['name', 'lat', 'lng', 'text'],
-                ['A', globalState.A.lat || '', globalState.A.lng || '', globalState.A.text || ''],
-                ['B', globalState.B.lat || '', globalState.B.lng || '', globalState.B.text || '']
-            ];
+            const rows = [['name', 'lat', 'lng', 'text']];
+
+            appData.markerGroups.forEach(group => {
+                rows.push([
+                    `A${group.id}`,
+                    group.data.A.lat || '',
+                    group.data.A.lng || '',
+                    group.data.A.text || ''
+                ]);
+                rows.push([
+                    `B${group.id}`,
+                    group.data.B.lat || '',
+                    group.data.B.lng || '',
+                    group.data.B.text || ''
+                ]);
+            });
 
             const csvContent = rows.map(row =>
                 row.map(cell => {
@@ -403,11 +455,9 @@
                 }
             });
 
-            // Update appData.facilityFilters with selected railroads
             appData.facilityFilters = selectedRailroads;
             console.log('Selected Railroads:', appData.facilityFilters);
 
-            // Filter rail lines
             if (selectedRailroads.length === 0) {
                 map.setFilter('rail-data', ['==', 'RROWNER1', '']);
                 map.setFilter('rail-data-2', ['==', 'RROWNER1', '']);
@@ -417,7 +467,6 @@
                 map.setFilter('rail-data-2', filter);
             }
 
-            // Also filter facilities by selected railroads
             filterFacilities();
         }
 
@@ -425,9 +474,6 @@
             console.log(colorsFromCSV);
             const legendContainer = document.getElementById('legend-items');
             legendContainer.innerHTML = '';
-
-            // This function is for facility type filters, not railroad filters
-            // Currently empty as filters array is empty
         }
 
         function filterFacilities(searchText) {
@@ -437,7 +483,6 @@
 
             const selectedRailroads = appData.facilityFilters;
 
-            // If no railroads are selected, show no facilities
             if (selectedRailroads.length === 0) {
                 map.getSource('facilities').setData({
                     type: 'FeatureCollection',
@@ -446,18 +491,14 @@
                 return;
             }
 
-            // Filter by both railroad and company search text
             const filtered = appData.facilityGeoJSON.filter(item => {
-                // Check if company name matches search text
                 const matchesSearchText = !searchText ||
                     (item.properties['Company'] &&
                         item.properties['Company'].toLowerCase().includes(searchText.toLowerCase()));
 
-                // Check if railroad matches selected railroads
                 const facilityRailroad = item.properties['Railroad'];
                 const matchesRailroad = selectedRailroads.includes(facilityRailroad);
 
-                // Both conditions must be true
                 return matchesSearchText && matchesRailroad;
             });
 
@@ -479,12 +520,17 @@
             return el.firstChild;
         }
 
-        function addABMarker(lngLat) {
-            if (!appData.abMarkerMode) return;
+        function addMarkerToGroup(lngLat) {
+            const incompleteGroup = appData.markerGroups.find(g => !g.hasA || !g.hasB);
 
-            if (!appData.markerA) {
-                const el = createPinMarker('A', '#4285F4');
-                appData.markerA = new mapboxgl.Marker({
+            if (!incompleteGroup) {
+                console.log('No incomplete groups. Please add a new group.');
+                return;
+            }
+
+            if (!incompleteGroup.hasA) {
+                const el = createPinMarker(`A${incompleteGroup.id}`, '#4285F4');
+                incompleteGroup.markerA = new mapboxgl.Marker({
                     element: el,
                     draggable: true,
                     anchor: 'bottom'
@@ -492,20 +538,18 @@
                     .setLngLat(lngLat)
                     .addTo(map);
 
-                globalState.A.lat = lngLat.lat;
-                globalState.A.lng = lngLat.lng;
+                incompleteGroup.data.A.lat = lngLat.lat;
+                incompleteGroup.data.A.lng = lngLat.lng;
+                incompleteGroup.hasA = true;
 
-                appData.markerA.on('dragend', () => {
-                    const lngLat = appData.markerA.getLngLat();
-                    globalState.A.lat = lngLat.lat;
-                    globalState.A.lng = lngLat.lng;
-                    updateGlobalState();
+                incompleteGroup.markerA.on('dragend', () => {
+                    const newLngLat = incompleteGroup.markerA.getLngLat();
+                    incompleteGroup.data.A.lat = newLngLat.lat;
+                    incompleteGroup.data.A.lng = newLngLat.lng;
                 });
-
-                updateGlobalState();
-            } else if (!appData.markerB) {
-                const el = createPinMarker('B', '#EA4335');
-                appData.markerB = new mapboxgl.Marker({
+            } else if (!incompleteGroup.hasB) {
+                const el = createPinMarker(`B${incompleteGroup.id}`, '#EA4335');
+                incompleteGroup.markerB = new mapboxgl.Marker({
                     element: el,
                     draggable: true,
                     anchor: 'bottom'
@@ -513,33 +557,16 @@
                     .setLngLat(lngLat)
                     .addTo(map);
 
-                globalState.B.lat = lngLat.lat;
-                globalState.B.lng = lngLat.lng;
+                incompleteGroup.data.B.lat = lngLat.lat;
+                incompleteGroup.data.B.lng = lngLat.lng;
+                incompleteGroup.hasB = true;
 
-                appData.markerB.on('dragend', () => {
-                    const lngLat = appData.markerB.getLngLat();
-                    globalState.B.lat = lngLat.lat;
-                    globalState.B.lng = lngLat.lng;
-                    updateGlobalState();
+                incompleteGroup.markerB.on('dragend', () => {
+                    const newLngLat = incompleteGroup.markerB.getLngLat();
+                    incompleteGroup.data.B.lat = newLngLat.lat;
+                    incompleteGroup.data.B.lng = newLngLat.lng;
                 });
-
-                updateGlobalState();
             }
-        }
-
-        function clearABMarkers() {
-            if (appData.markerA) {
-                appData.markerA.remove();
-                appData.markerA = null;
-            }
-            if (appData.markerB) {
-                appData.markerB.remove();
-                appData.markerB = null;
-            }
-            globalState.A = { lat: null, lng: null, text: '' };
-            globalState.B = { lat: null, lng: null, text: '' };
-            document.getElementById('marker-a-text').value = '';
-            document.getElementById('marker-b-text').value = '';
         }
 
         // Generate railroad filters on page load
@@ -580,7 +607,6 @@
                         features: features
                     });
 
-                    // Apply initial filter based on selected railroads
                     filterFacilities();
 
                     const displayFields = [
@@ -592,9 +618,7 @@
                     ];
 
                     map.on('click', 'facilities', (e) => {
-
                         const subdivisions = getSubdivision(e)
-
                         const coordinates = e.features[0].geometry.coordinates.slice();
                         const properties = e.features[0].properties;
 
@@ -641,17 +665,10 @@
                     });
 
                     generateLegend(colorsFromCSV);
-
-
                 });
 
             function getSubdivision(e) {
-                // Convert click point to Turf.js format
                 const clickPoint = turf.point([e.lngLat.lng, e.lngLat.lat]);
-
-                // Use larger bbox for better detection - scale with zoom
-                // const zoomLevel = map.getZoom();
-                // const bboxSize = Math.max(10, 100 / Math.pow(2, zoomLevel - 10));
                 const zoomLevel = map.getZoom();
                 const bboxSize = Math.max(50, Math.min(400, 50 + (zoomLevel - 10) * 50));
 
@@ -660,7 +677,6 @@
                     [e.point.x + bboxSize, e.point.y + bboxSize]
                 ];
 
-                // Query rail features from both layers
                 const railFeatures = map.queryRenderedFeatures(bbox, {
                     layers: ['rail-data', 'rail-data-2']
                 });
@@ -672,18 +688,14 @@
                     return [];
                 }
 
-                // Find closest line to click point using Turf.js
                 let closestFeature = null;
                 let closestDistance = Infinity;
 
                 railFeatures.forEach(feature => {
                     try {
                         if (feature.geometry.type === 'LineString' || feature.geometry.type === 'MultiLineString') {
-                            // Find nearest point on this line
                             const nearestPt = turf.nearestPointOnLine(feature, clickPoint);
                             const distance = nearestPt.properties.dist;
-
-                            //console.log('Distance to line:', distance, 'km');
 
                             if (distance < closestDistance) {
                                 closestDistance = distance;
@@ -695,7 +707,6 @@
                     }
                 });
 
-                // Extract subdivisions from closest feature
                 const SUBDIV = new Set();
                 if (closestFeature) {
                     console.log('Closest feature properties:', closestFeature.properties);
@@ -705,7 +716,6 @@
                         SUBDIV.add(closestFeature.properties['SUBDIV']);
                     }
 
-                    // Add additional properties for debugging
                     console.log('Layer:', closestFeature.layer.id);
                     console.log('RROWNER1:', closestFeature.properties['RROWNER1']);
                 } else {
@@ -714,7 +724,6 @@
 
                 return [...SUBDIV];
             }
-
 
             d3.csv("https://docs.google.com/spreadsheets/d/e/2PACX-1vRb3b2jMVWa5Zi5_cLYJIhkC1sZP2T1FAH8yVwuN0egPLEsOI7HwMn7Tp8KtAqI0eGJnfgG-jz-LtRx/pub?output=csv")
                 .then(function (data) {
@@ -839,7 +848,6 @@
                 map.getZoom() < 12 ? map.setLayoutProperty('satellite-layer', 'visibility', 'none') : map.setLayoutProperty('satellite-layer', 'visibility', 'visible');
             });
 
-            // Helper function to generate rail popup content
             function generateRailPopup(properties) {
                 const name = properties['SUBDIV'] || properties['BRANCH'] || properties['RROWNER1'] || 'Unknown';
                 const fields = [
@@ -871,7 +879,6 @@
                 `;
             }
 
-            // Popup for both rail layers
             ['rail-data', 'rail-data-2'].forEach(layerId => {
                 map.on('click', layerId, (e) => {
                     popup.setLngLat(e.lngLat)
@@ -887,7 +894,6 @@
                     map.getCanvas().style.cursor = '';
                 });
             });
-
 
             map.addSource('csv-points', {
                 type: 'geojson',
@@ -988,23 +994,7 @@
             });
 
             document.getElementById('ab-marker-btn').addEventListener('click', function (e) {
-                appData.abMarkerMode = !appData.abMarkerMode;
-                e.target.classList.toggle('active');
-                document.getElementById('marker-inputs').classList.toggle('active');
-                document.getElementById('export-markers-btn').classList.toggle('active');
-                if (!appData.abMarkerMode) {
-                    clearABMarkers();
-                }
-            });
-
-            document.getElementById('marker-a-text').addEventListener('input', function (e) {
-                globalState.A.text = e.target.value;
-                updateGlobalState();
-            });
-
-            document.getElementById('marker-b-text').addEventListener('input', function (e) {
-                globalState.B.text = e.target.value;
-                updateGlobalState();
+                createMarkerGroup();
             });
 
             document.getElementById('export-markers-btn').addEventListener('click', function () {
@@ -1012,8 +1002,12 @@
             });
 
             map.on('click', function (e) {
-                if (appData.abMarkerMode && (!appData.markerA || !appData.markerB)) {
-                    addABMarker(e.lngLat);
+                const features = map.queryRenderedFeatures(e.point, {
+                    layers: ['facilities', 'rail-data', 'rail-data-2']
+                });
+
+                if (features.length === 0) {
+                    addMarkerToGroup(e.lngLat);
                 }
             });
 
@@ -1022,7 +1016,7 @@
             const mapOverlay = document.getElementById('map-overlay');
 
             if (isMobile) {
-                mapOverlay.style.display = 'block';
+                mapOverlay.style.display = 'flex';
                 map.scrollZoom.disable();
                 map.dragPan.disable();
                 map.touchZoomRotate.disable();
@@ -1042,7 +1036,7 @@
                         map.scrollZoom.disable();
                         map.dragPan.disable();
                         map.touchZoomRotate.disable();
-                        mapOverlay.style.display = 'block';
+                        mapOverlay.style.display = 'flex';
                         document.removeEventListener('touchstart', checkIfOutsideMap);
                     }
                 }
