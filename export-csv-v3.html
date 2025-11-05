@@ -393,25 +393,25 @@
             const container = document.getElementById('csv-railroad-filters');
             container.innerHTML = '';
 
-            const uniqueRailroads = [...new Set(appData.csvRailroads)].sort();
+            const uniqueSensorCategories = [...new Set(appData.csvRailroads)].sort();
 
-            if (uniqueRailroads.length === 0) return;
+            if (uniqueSensorCategories.length === 0) return;
 
-            uniqueRailroads.forEach(railroad => {
+            uniqueSensorCategories.forEach(category => {
                 const legendItem = document.createElement('div');
                 legendItem.className = 'legend-item';
 
                 const checkbox = document.createElement('input');
                 checkbox.type = 'checkbox';
                 checkbox.className = 'layer-toggle-checkbox csv-railroad-checkbox';
-                checkbox.id = `csv-filter-${railroad}`;
+                checkbox.id = `csv-filter-${category}`;
                 checkbox.checked = true;
                 checkbox.addEventListener('change', filterCSVPoints);
 
                 const label = document.createElement('label');
                 label.className = 'layer-toggle-label';
                 label.htmlFor = checkbox.id;
-                label.textContent = railroad;
+                label.textContent = category;
 
                 legendItem.appendChild(checkbox);
                 legendItem.appendChild(label);
@@ -419,20 +419,20 @@
                 container.appendChild(legendItem);
             });
 
-            appData.csvRailroadFilters = uniqueRailroads;
+            appData.csvRailroadFilters = uniqueSensorCategories;
         }
 
         function filterCSVPoints() {
-            const selectedRailroads = [];
+            const selectedCategories = [];
             document.querySelectorAll('.csv-railroad-checkbox').forEach(checkbox => {
                 if (checkbox.checked) {
-                    const railroad = checkbox.id.replace('csv-filter-', '');
-                    selectedRailroads.push(railroad);
+                    const category = checkbox.id.replace('csv-filter-', '');
+                    selectedCategories.push(category);
                 }
             });
 
             const filtered = appData.csvData.filter(feature => {
-                return selectedRailroads.includes(feature.properties.Railroad);
+                return selectedCategories.includes(feature.properties['Sensor Category']);
             });
 
             if (map.getSource('csv-points')) {
@@ -1039,7 +1039,7 @@
                     { key: 'Railroad', label: 'Railroad' },
                     { key: 'Purpose', label: 'Purpose' },
                     { key: 'Subdivision', label: 'Subdivision' },
-                    // { key: 'Track_Rights', label: 'Track Rights' },
+                    { key: 'Track_Rights', label: 'Track Rights' },
                     { key: 'Sensor Category', label: 'Sensor Category' }
                 ];
 
@@ -1069,7 +1069,6 @@
                     .setHTML(popupContent)
                     .addTo(map);
             });
-
 
             map.on('mouseenter', 'csv-points-layer', () => {
                 map.getCanvas().style.cursor = 'pointer';
@@ -1235,9 +1234,9 @@
                     }));
 
                 if (features.length > 0) {
-                    // Extract unique railroads from CSV
-                    const railroads = [...new Set(features.map(f => f.properties.Railroad).filter(Boolean))];
-                    appData.csvRailroads = railroads;
+                    // Extract unique sensor categories from CSV
+                    const sensorCategories = [...new Set(features.map(f => f.properties['Sensor Category']).filter(Boolean))];
+                    appData.csvRailroads = sensorCategories;
                     appData.csvData = features;
 
                     // Apply color from CSV or default to orange
