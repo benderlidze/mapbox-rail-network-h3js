@@ -230,6 +230,22 @@
             margin-top: 10px;
         }
 
+        .csv-layer-controls {
+            background: #f0f7ff;
+            padding: 10px;
+            border-radius: 3px;
+            margin-top: 10px;
+            border: 1px solid #d0e8ff;
+        }
+
+        .csv-layer-controls .legend-title {
+            margin-bottom: 8px;
+        }
+
+        .csv-railroad-filters {
+            margin-top: 8px;
+        }
+
         #map-overlay {
             display: none;
             position: absolute;
@@ -270,6 +286,14 @@
         <div class="marker-groups-container" id="marker-groups-container"></div>
         <button id="open-csv-btn">Open CSV</button>
         <input type="file" id="csv-file-input" accept=".csv" style="display:none" />
+        <div class="csv-layer-controls" id="csv-layer-controls" style="display: none;">
+            <div class="legend-title">CSV Layer</div>
+            <div class="layer-toggle-item">
+                <input type="checkbox" class="layer-toggle-checkbox" id="toggle-csv-layer" checked>
+                <label class="layer-toggle-label" for="toggle-csv-layer">Show CSV Points</label>
+            </div>
+            <div class="csv-railroad-filters" id="csv-railroad-filters"></div>
+        </div>
         <input type="text" id="company-search" placeholder="Filter by company name..." />
         <div class="layer-toggles">
             <div class="legend-title">Layer Visibility</div>
@@ -309,7 +333,10 @@
             facilityFilters: [],
             facilityColors: {},
             facilityGeoJSON: [],
-            markerGroups: []
+            markerGroups: [],
+            csvRailroads: [],
+            csvData: [],
+            csvRailroadFilters: []
         }
 
         let markerGroupCounter = 0;
@@ -360,6 +387,60 @@
             });
 
             appData.facilityFilters = railroads.map(r => r.name);
+        }
+
+        function generateCSVRailroadFilters() {
+            const container = document.getElementById('csv-railroad-filters');
+            container.innerHTML = '';
+
+            const uniqueRailroads = [...new Set(appData.csvRailroads)].sort();
+
+            if (uniqueRailroads.length === 0) return;
+
+            uniqueRailroads.forEach(railroad => {
+                const legendItem = document.createElement('div');
+                legendItem.className = 'legend-item';
+
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.className = 'layer-toggle-checkbox csv-railroad-checkbox';
+                checkbox.id = `csv-filter-${railroad}`;
+                checkbox.checked = true;
+                checkbox.addEventListener('change', filterCSVPoints);
+
+                const label = document.createElement('label');
+                label.className = 'layer-toggle-label';
+                label.htmlFor = checkbox.id;
+                label.textContent = railroad;
+
+                legendItem.appendChild(checkbox);
+                legendItem.appendChild(label);
+
+                container.appendChild(legendItem);
+            });
+
+            appData.csvRailroadFilters = uniqueRailroads;
+        }
+
+        function filterCSVPoints() {
+            const selectedRailroads = [];
+            document.querySelectorAll('.csv-railroad-checkbox').forEach(checkbox => {
+                if (checkbox.checked) {
+                    const railroad = checkbox.id.replace('csv-filter-', '');
+                    selectedRailroads.push(railroad);
+                }
+            });
+
+            const filtered = appData.csvData.filter(feature => {
+                return selectedRailroads.includes(feature.properties.Railroad);
+            });
+
+            if (map.getSource('csv-points')) {
+                map.getSource('csv-points').setData({
+                    type: 'FeatureCollection',
+                    features: filtered
+                });
+            }
         }
 
         function createMarkerGroup() {
@@ -459,7 +540,7 @@
                 row.map(cell => {
                     const cellStr = String(cell);
                     if (cellStr.includes(',') || cellStr.includes('"') || cellStr.includes('\n')) {
-                        return `"${cellStr.replace(/"/g, '""')}"`;
+                        return `"${cellStr.replace(/\"/g, '""')}"`;
                     }
                     return cellStr;
                 }).join(',')
@@ -938,11 +1019,64 @@
                 source: 'csv-points',
                 paint: {
                     'circle-radius': 8,
-                    'circle-color': '#000000',
+                    'circle-color': [
+                        'coalesce',
+                        ['feature-state', 'color'],
+                        ['get', 'circleColor']
+                    ],
                     'circle-opacity': 0.9,
                     'circle-stroke-width': 1,
                     'circle-stroke-color': '#fff'
                 }
+            });
+
+            map.on('click', 'csv-points-layer', (e) => {
+                const coordinates = e.features[0].geometry.coordinates.slice();
+                const properties = e.features[0].properties;
+
+                const displayFields = [
+                    { key: 'Site Name', label: 'Site Name' },
+                    { key: 'Railroad', label: 'Railroad' },
+                    { key: 'Purpose', label: 'Purpose' },
+                    { key: 'Subdivision', label: 'Subdivision' },
+                    // { key: 'Track_Rights', label: 'Track Rights' },
+                    { key: 'Sensor Category', label: 'Sensor Category' }
+                ];
+
+                let popupContent = `
+                    <div style="font-family: 'Poppins', sans-serif; padding: 8px;">
+                    <h3 style="margin-top: 0; margin-bottom: 10px; color: #333; font-size: 16px; border-bottom: 1px solid #eee; padding-bottom: 5px;">
+                        ${properties['Site Name'] || 'Unknown Site'}
+                    </h3>
+                `;
+
+                displayFields.forEach(field => {
+                    popupContent += properties[field.key] !== "" && properties[field.key] !== undefined ? `
+                    <div style="margin-bottom: 5px;">
+                        <strong style="color: #555; font-size: 13px;">${field.label}:</strong> 
+                        <span style="font-size: 13px;">${properties[field.key]}</span>
+                    </div> 
+                    ` : ``;
+                });
+
+                popupContent += `</div>`;
+
+                while (Math.abs(e.lngLat.lng - coordinates[0]) > 180) {
+                    coordinates[0] += e.lngLat.lng > coordinates[0] ? 360 : -360;
+                }
+
+                popup.setLngLat(coordinates)
+                    .setHTML(popupContent)
+                    .addTo(map);
+            });
+
+
+            map.on('mouseenter', 'csv-points-layer', () => {
+                map.getCanvas().style.cursor = 'pointer';
+            });
+
+            map.on('mouseleave', 'csv-points-layer', () => {
+                map.getCanvas().style.cursor = '';
             });
 
             map.addSource('sensors', {
@@ -1023,6 +1157,11 @@
                 map.setLayoutProperty('facilities', 'visibility', visibility);
             });
 
+            document.getElementById('toggle-csv-layer').addEventListener('change', function (e) {
+                const visibility = e.target.checked ? 'visible' : 'none';
+                map.setLayoutProperty('csv-points-layer', 'visibility', visibility);
+            });
+
             document.getElementById('ab-marker-btn').addEventListener('click', function (e) {
                 createMarkerGroup();
             });
@@ -1085,21 +1224,37 @@
                 const csvText = e.target.result;
                 const data = d3.csvParse(csvText);
                 const features = data
-                    .filter(row => row.latitude && row.longitude)
+                    .filter(row => row.lat && row.lon)
                     .map(row => ({
                         type: 'Feature',
                         properties: { ...row },
                         geometry: {
                             type: 'Point',
-                            coordinates: [parseFloat(row.longitude), parseFloat(row.latitude)]
+                            coordinates: [parseFloat(row.lon), parseFloat(row.lat)]
                         }
                     }));
-                if (map.getSource('csv-points')) {
-                    console.log('features', features);
-                    map.getSource('csv-points').setData({
-                        type: 'FeatureCollection',
-                        features: features
+
+                if (features.length > 0) {
+                    // Extract unique railroads from CSV
+                    const railroads = [...new Set(features.map(f => f.properties.Railroad).filter(Boolean))];
+                    appData.csvRailroads = railroads;
+                    appData.csvData = features;
+
+                    // Apply color from CSV or default to orange
+                    features.forEach(feature => {
+                        feature.properties.circleColor = feature.properties.Color || 'orange';
                     });
+
+                    if (map.getSource('csv-points')) {
+                        map.getSource('csv-points').setData({
+                            type: 'FeatureCollection',
+                            features: features
+                        });
+                    }
+
+                    // Show CSV layer controls
+                    document.getElementById('csv-layer-controls').style.display = 'block';
+                    generateCSVRailroadFilters();
                 }
             };
             reader.readAsText(file);
