@@ -317,6 +317,8 @@
         <div id="legend-items"></div>
     </div>
 
+    https://docs.google.com/spreadsheets/d/e/2PACX-1vQQ3wGuZSJoX2fDPPWj9u-Ty_JvuyOu-UYIWKM7i7gjU-5E5_wxLepUzYYRAjuGnsgGdztRZjBwXO5P/pub?output=csv
+
     <script>
         // Railroad configuration array
         const railroads = [
@@ -683,7 +685,52 @@
         // Generate railroad filters on page load
         generateRailroadFilters();
 
-        map.on('load', () => {
+        map.on('load', async () => {
+
+
+            const layerManager = new SpreadsheetLayerManager(map, {
+                layerIdPrefix: 'sensor-csv',
+                circleRadius: 8,
+                circleColor: '#0f0'
+            });
+            try {
+                await layerManager.load(
+                    'https://docs.google.com/spreadsheets/d/e/2PACX-1vQQ3wGuZSJoX2fDPPWj9u-Ty_JvuyOu-UYIWKM7i7gjU-5E5_wxLepUzYYRAjuGnsgGdztRZjBwXO5P/pub?output=csv',
+                    {
+                        latField: 'lat',
+                        lonField: 'lon',
+                        filterFields: [
+                            'Sensor Category',
+                            'Facility Category',
+                            'Railroad',
+                            'Install Date',
+                            'State/Province',
+                            'A-Bs'
+                        ],
+                        popupFields: [
+                            'Sensor Name',
+                            'Sensor Category',
+                            'Facility Category',
+                            'Railroad',
+                            'Install Date',
+                            'State/Province',
+                            'A-Bs',
+                            'Hex Color',
+                            'Purpose',
+                            'Between',
+                            'Subdivision',
+                            'Track_Rights',
+                            'Notes'
+                        ],
+                        targetContainerId: 'legend'
+                    }
+                );
+                console.log('CSV layer loaded with popups and filters');
+            } catch (error) {
+                console.error('Failed to load CSV layer:', error);
+            }
+
+
             const popup = new mapboxgl.Popup({
                 closeButton: true,
                 closeOnClick: true,
@@ -1259,6 +1306,366 @@
             reader.readAsText(file);
             evt.target.value = '';
         });
+
+        class SpreadsheetLayerManager {
+            constructor(map, options = {}) {
+                this.map = map;
+                this.layerIdPrefix = options.layerIdPrefix || 'csv-layer';
+                this.circleRadius = options.circleRadius || 6;
+                this.circleColor = options.circleColor || '#3498db';
+                this.circleStrokeColor = options.circleStrokeColor || '#fff';
+                this.circleStrokeWidth = options.circleStrokeWidth || 2;
+
+                this.layerId = null;
+                this.sourceId = null;
+                this.data = null;
+                this.geoJSON = null;
+                this.filters = {};
+                this.filterStates = {};
+                this.filterContainerElement = null;
+                this.popup = new mapboxgl.Popup({
+                    closeButton: true,
+                    closeOnClick: true
+                });
+            }
+
+            async load(spreadsheetUrl, config = {}) {
+                const {
+                    latField = 'lat',
+                    lonField = 'lon',
+                    filterFields = [],
+                    popupFields = [],
+                    targetContainerId = 'legend'
+                } = config;
+
+                try {
+                    this.data = await d3.csv(spreadsheetUrl);
+
+                    if (!this.data || this.data.length === 0) {
+                        throw new Error('No data found in spreadsheet');
+                    }
+
+                    this.layerId = `${this.layerIdPrefix}-${Date.now()}`;
+                    this.sourceId = `${this.layerId}-source`;
+                    this.latField = latField;
+                    this.lonField = lonField;
+                    this.popupFields = popupFields;
+
+                    this.geoJSON = this._createGeoJSON(this.data);
+                    this._addLayerToMap();
+                    this._buildFilters(filterFields);
+                    this._renderFilterControls(targetContainerId);
+                    this._addClickHandler();
+
+                    return {
+                        layerId: this.layerId,
+                        sourceId: this.sourceId,
+                        data: this.data,
+                        geoJSON: this.geoJSON,
+                        filters: this.filters
+                    };
+
+                } catch (error) {
+                    console.error('Error loading spreadsheet:', error);
+                    throw error;
+                }
+            }
+
+            _createGeoJSON(data) {
+                return {
+                    type: 'FeatureCollection',
+                    features: data
+                        .filter(row => row[this.latField] && row[this.lonField])
+                        .map((row, index) => ({
+                            type: 'Feature',
+                            geometry: {
+                                type: 'Point',
+                                coordinates: [parseFloat(row[this.lonField]), parseFloat(row[this.latField])]
+                            },
+                            properties: { ...row, _id: index },
+                            id: index
+                        }))
+                };
+            }
+
+            _addLayerToMap() {
+                this.map.addSource(this.sourceId, {
+                    type: 'geojson',
+                    data: this.geoJSON
+                });
+
+                this.map.addLayer({
+                    id: this.layerId,
+                    type: 'circle',
+                    source: this.sourceId,
+                    paint: {
+                        'circle-radius': this.circleRadius,
+                        'circle-color': this.circleColor,
+                        'circle-stroke-width': this.circleStrokeWidth,
+                        'circle-stroke-color': this.circleStrokeColor
+                    }
+                });
+            }
+
+            _addClickHandler() {
+                this.map.on('click', this.layerId, (e) => {
+                    if (e.features.length > 0) {
+                        const feature = e.features[0];
+                        const coordinates = feature.geometry.coordinates.slice();
+                        const properties = feature.properties;
+
+                        let popupHTML = '<div style="font-family: Poppins, sans-serif; font-size: 12px;">';
+
+                        this.popupFields.forEach(field => {
+                            const value = properties[field];
+                            if (value !== undefined && value !== null && value !== '') {
+                                popupHTML += `
+                            <div style="margin-bottom: 8px;">
+                                <strong style="color: #333;">${field}:</strong>
+                                <span style="color: #666;"> ${value}</span>
+                            </div>
+                        `;
+                            }
+                        });
+
+                        popupHTML += '</div>';
+
+                        while (Math.abs(e.lngLat.lng - coordinates[0]) > 180) {
+                            coordinates[0] += e.lngLat.lng > coordinates[0] ? 360 : -360;
+                        }
+
+                        this.popup
+                            .setLngLat(coordinates)
+                            .setHTML(popupHTML)
+                            .addTo(this.map);
+                    }
+                });
+
+                this.map.on('mouseenter', this.layerId, () => {
+                    this.map.getCanvas().style.cursor = 'pointer';
+                });
+
+                this.map.on('mouseleave', this.layerId, () => {
+                    this.map.getCanvas().style.cursor = '';
+                });
+            }
+
+            _buildFilters(filterFields) {
+                filterFields.forEach(field => {
+                    const uniqueValues = [...new Set(
+                        this.data
+                            .map(row => row[field])
+                            .filter(val => val !== undefined && val !== null && val !== '')
+                    )].sort();
+
+                    this.filters[field] = uniqueValues;
+                    this.filterStates[field] = uniqueValues.reduce((acc, val) => {
+                        acc[val] = true;
+                        return acc;
+                    }, {});
+                });
+            }
+
+            _renderFilterControls(targetContainerId) {
+                const targetContainer = document.getElementById(targetContainerId);
+                if (!targetContainer) {
+                    console.error(`Container with id "${targetContainerId}" not found`);
+                    return;
+                }
+
+                const filterWrapper = document.createElement('div');
+                filterWrapper.className = 'csv-layer-controls';
+                filterWrapper.id = `${this.layerId}-filters`;
+                filterWrapper.style.background = '#f0f7ff';
+                filterWrapper.style.padding = '10px';
+                filterWrapper.style.borderRadius = '3px';
+                filterWrapper.style.marginTop = '10px';
+                filterWrapper.style.border = '1px solid #d0e8ff';
+
+                const title = document.createElement('div');
+                title.className = 'legend-title';
+                title.textContent = 'CSV Layer Filters';
+                title.style.marginBottom = '10px';
+                filterWrapper.appendChild(title);
+
+                const visibilityToggle = document.createElement('div');
+                visibilityToggle.className = 'layer-toggle-item';
+                visibilityToggle.style.display = 'flex';
+                visibilityToggle.style.alignItems = 'center';
+                visibilityToggle.style.marginBottom = '10px';
+
+                const visibilityCheckbox = document.createElement('input');
+                visibilityCheckbox.type = 'checkbox';
+                visibilityCheckbox.className = 'layer-toggle-checkbox';
+                visibilityCheckbox.id = `toggle-${this.layerId}`;
+                visibilityCheckbox.checked = true;
+                visibilityCheckbox.addEventListener('change', (e) => {
+                    this._toggleLayerVisibility(e.target.checked);
+                });
+
+                const visibilityLabel = document.createElement('label');
+                visibilityLabel.className = 'layer-toggle-label';
+                visibilityLabel.htmlFor = visibilityCheckbox.id;
+                visibilityLabel.textContent = 'Show CSV Points';
+                visibilityLabel.style.fontSize = '12px';
+                visibilityLabel.style.cursor = 'pointer';
+
+                visibilityToggle.appendChild(visibilityCheckbox);
+                visibilityToggle.appendChild(visibilityLabel);
+                filterWrapper.appendChild(visibilityToggle);
+
+                Object.keys(this.filters).forEach(field => {
+                    const fieldSection = document.createElement('div');
+                    fieldSection.className = 'filter-section';
+                    fieldSection.style.marginBottom = '12px';
+
+                    const fieldTitle = document.createElement('div');
+                    fieldTitle.className = 'legend-title';
+                    fieldTitle.textContent = field;
+                    fieldTitle.style.fontSize = '12px';
+                    fieldTitle.style.fontWeight = '600';
+                    fieldTitle.style.marginBottom = '6px';
+                    fieldSection.appendChild(fieldTitle);
+
+                    this.filters[field].forEach(value => {
+                        const filterItem = document.createElement('div');
+                        filterItem.className = 'legend-item';
+                        filterItem.style.display = 'flex';
+                        filterItem.style.alignItems = 'center';
+                        filterItem.style.marginBottom = '4px';
+
+                        const checkbox = document.createElement('input');
+                        checkbox.type = 'checkbox';
+                        checkbox.className = 'facility-checkbox';
+                        checkbox.checked = this.filterStates[field][value];
+                        checkbox.id = `filter-${this.layerId}-${field}-${value}`;
+
+                        checkbox.addEventListener('change', (e) => {
+                            this.filterStates[field][value] = e.target.checked;
+                            this._applyFilters();
+                        });
+
+                        const label = document.createElement('label');
+                        label.className = 'facility-label';
+                        label.htmlFor = checkbox.id;
+                        label.textContent = value;
+                        label.style.fontSize = '11px';
+                        label.style.cursor = 'pointer';
+
+                        filterItem.appendChild(checkbox);
+                        filterItem.appendChild(label);
+                        fieldSection.appendChild(filterItem);
+                    });
+
+                    filterWrapper.appendChild(fieldSection);
+                });
+
+                this._addFilterButtons(filterWrapper);
+                targetContainer.appendChild(filterWrapper);
+                this.filterContainerElement = filterWrapper;
+            }
+
+            _addFilterButtons(container) {
+                const buttonContainer = document.createElement('div');
+                buttonContainer.style.marginTop = '10px';
+                buttonContainer.style.display = 'flex';
+                buttonContainer.style.gap = '5px';
+
+                const selectAllBtn = document.createElement('button');
+                selectAllBtn.textContent = 'Select All';
+                selectAllBtn.style.flex = '1';
+                selectAllBtn.style.fontSize = '11px';
+                selectAllBtn.style.padding = '6px';
+                selectAllBtn.addEventListener('click', () => this._toggleAllFilters(true));
+
+                const deselectAllBtn = document.createElement('button');
+                deselectAllBtn.textContent = 'Deselect All';
+                deselectAllBtn.style.flex = '1';
+                deselectAllBtn.style.fontSize = '11px';
+                deselectAllBtn.style.padding = '6px';
+                deselectAllBtn.addEventListener('click', () => this._toggleAllFilters(false));
+
+                buttonContainer.appendChild(selectAllBtn);
+                buttonContainer.appendChild(deselectAllBtn);
+                container.appendChild(buttonContainer);
+            }
+
+            _toggleAllFilters(state) {
+                if (!this.filterContainerElement) return;
+
+                const checkboxes = this.filterContainerElement.querySelectorAll('.facility-checkbox');
+                checkboxes.forEach(checkbox => {
+                    checkbox.checked = state;
+                });
+
+                Object.keys(this.filterStates).forEach(field => {
+                    Object.keys(this.filterStates[field]).forEach(value => {
+                        this.filterStates[field][value] = state;
+                    });
+                });
+
+                this._applyFilters();
+            }
+
+            _toggleLayerVisibility(visible) {
+                if (this.map.getLayer(this.layerId)) {
+                    this.map.setLayoutProperty(
+                        this.layerId,
+                        'visibility',
+                        visible ? 'visible' : 'none'
+                    );
+                }
+            }
+
+            _applyFilters() {
+                const filteredFeatures = this.geoJSON.features.filter(feature => {
+                    return Object.keys(this.filterStates).every(field => {
+                        const value = feature.properties[field];
+
+                        // If the field doesn't exist in filterStates, include the feature
+                        if (!this.filterStates[field]) return true;
+
+                        // If the value doesn't exist in this field's filters, include it
+                        if (this.filterStates[field][value] === undefined) return true;
+
+                        // Otherwise check if the filter is enabled
+                        return this.filterStates[field][value] === true;
+                    });
+                });
+
+                const filteredGeoJSON = {
+                    type: 'FeatureCollection',
+                    features: filteredFeatures
+                };
+
+                const source = this.map.getSource(this.sourceId);
+                if (source) {
+                    source.setData(filteredGeoJSON);
+                }
+            }
+
+            remove() {
+                if (this.popup) {
+                    this.popup.remove();
+                }
+
+                this.map.off('click', this.layerId);
+                this.map.off('mouseenter', this.layerId);
+                this.map.off('mouseleave', this.layerId);
+
+                if (this.filterContainerElement && this.filterContainerElement.parentNode) {
+                    this.filterContainerElement.parentNode.removeChild(this.filterContainerElement);
+                }
+
+                if (this.layerId && this.map.getLayer(this.layerId)) {
+                    this.map.removeLayer(this.layerId);
+                }
+                if (this.sourceId && this.map.getSource(this.sourceId)) {
+                    this.map.removeSource(this.sourceId);
+                }
+            }
+        }
+
     </script>
 </body>
 

@@ -93,3 +93,10 @@ SELECT get_route_geojson(
   -123.7494, 46.9800,
   0.01  -- snap_tolerance in degrees (~1km)
 );
+
+
+
+
+https://docs.google.com/spreadsheets/d/1QgSdCLt3NpA2U9naBFoZ8NO55o80B52Ry_upXHymPjg/edit?gid=1392841200#gid=1392841200
+
+https://docs.google.com/spreadsheets/d/16mgAtEk_rdJfQyKgWbIZ-7EmmNh7yK7opnt5uGsAvGs/edit?gid=225856772#gid=225856772
