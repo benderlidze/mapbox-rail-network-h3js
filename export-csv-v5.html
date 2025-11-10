@@ -317,8 +317,6 @@
         <div id="legend-items"></div>
     </div>
 
-    https://docs.google.com/spreadsheets/d/e/2PACX-1vQQ3wGuZSJoX2fDPPWj9u-Ty_JvuyOu-UYIWKM7i7gjU-5E5_wxLepUzYYRAjuGnsgGdztRZjBwXO5P/pub?output=csv
-
     <script>
         // Railroad configuration array
         const railroads = [
@@ -688,48 +686,47 @@
         map.on('load', async () => {
 
 
-            const layerManager = new SpreadsheetLayerManager(map, {
+            const sensorsLayer = new SpreadsheetLayerManager(map, {
                 layerIdPrefix: 'sensor-csv',
                 circleRadius: 8,
-                circleColor: '#0f0'
+                circleColor: '#0f0',
+                circleStrokeColor: '#fff',
+                circleStrokeWidth: 2,
+                title: 'Sensor locations',
+                latField: 'lat',
+                lonField: 'lon',
+                filterFields: [
+                    'Sensor Category',
+                    'Facility Category',
+                    'Railroad',
+                    'Install Date',
+                    'State/Province',
+                    'A-Bs'
+                ],
+                popupFields: [
+                    'Sensor Name',
+                    'Sensor Category',
+                    'Facility Category',
+                    'Railroad',
+                    'Install Date',
+                    'State/Province',
+                    'A-Bs',
+                    'Hex Color',
+                    'Purpose',
+                    'Between',
+                    'Subdivision',
+                    'Track_Rights',
+                    'Notes'
+                ],
+                targetContainerId: 'legend'
             });
-            try {
-                await layerManager.load(
-                    'https://docs.google.com/spreadsheets/d/e/2PACX-1vQQ3wGuZSJoX2fDPPWj9u-Ty_JvuyOu-UYIWKM7i7gjU-5E5_wxLepUzYYRAjuGnsgGdztRZjBwXO5P/pub?output=csv',
-                    {
-                        latField: 'lat',
-                        lonField: 'lon',
-                        filterFields: [
-                            'Sensor Category',
-                            'Facility Category',
-                            'Railroad',
-                            'Install Date',
-                            'State/Province',
-                            'A-Bs'
-                        ],
-                        popupFields: [
-                            'Sensor Name',
-                            'Sensor Category',
-                            'Facility Category',
-                            'Railroad',
-                            'Install Date',
-                            'State/Province',
-                            'A-Bs',
-                            'Hex Color',
-                            'Purpose',
-                            'Between',
-                            'Subdivision',
-                            'Track_Rights',
-                            'Notes'
-                        ],
-                        targetContainerId: 'legend'
-                    }
-                );
-                console.log('CSV layer loaded with popups and filters');
-            } catch (error) {
-                console.error('Failed to load CSV layer:', error);
-            }
 
+            try {
+                await sensorsLayer.load('https://docs.google.com/spreadsheets/d/e/2PACX-1vQQ3wGuZSJoX2fDPPWj9u-Ty_JvuyOu-UYIWKM7i7gjU-5E5_wxLepUzYYRAjuGnsgGdztRZjBwXO5P/pub?output=csv');
+                console.log('Sensor layer loaded');
+            } catch (error) {
+                console.error('Failed to load sensor layer:', error);
+            }
 
             const popup = new mapboxgl.Popup({
                 closeButton: true,
@@ -1308,14 +1305,23 @@
         });
 
         class SpreadsheetLayerManager {
-            constructor(map, options = {}) {
+            constructor(map, config = {}) {
                 this.map = map;
-                this.layerIdPrefix = options.layerIdPrefix || 'csv-layer';
-                this.circleRadius = options.circleRadius || 6;
-                this.circleColor = options.circleColor || '#3498db';
-                this.circleStrokeColor = options.circleStrokeColor || '#fff';
-                this.circleStrokeWidth = options.circleStrokeWidth || 2;
 
+                // Store configuration
+                this.layerIdPrefix = config.layerIdPrefix || 'csv-layer';
+                this.circleRadius = config.circleRadius || 6;
+                this.circleColor = config.circleColor || '#3498db';
+                this.circleStrokeColor = config.circleStrokeColor || '#fff';
+                this.circleStrokeWidth = config.circleStrokeWidth || 2;
+                this.latField = config.latField || 'lat';
+                this.lonField = config.lonField || 'lon';
+                this.filterFields = config.filterFields || [];
+                this.popupFields = config.popupFields || [];
+                this.targetContainerId = config.targetContainerId || 'legend';
+                this.title = config.title || 'CSV Layer Filters';
+
+                // Layer state
                 this.layerId = null;
                 this.sourceId = null;
                 this.data = null;
@@ -1329,15 +1335,7 @@
                 });
             }
 
-            async load(spreadsheetUrl, config = {}) {
-                const {
-                    latField = 'lat',
-                    lonField = 'lon',
-                    filterFields = [],
-                    popupFields = [],
-                    targetContainerId = 'legend'
-                } = config;
-
+            async load(spreadsheetUrl) {
                 try {
                     this.data = await d3.csv(spreadsheetUrl);
 
@@ -1347,14 +1345,11 @@
 
                     this.layerId = `${this.layerIdPrefix}-${Date.now()}`;
                     this.sourceId = `${this.layerId}-source`;
-                    this.latField = latField;
-                    this.lonField = lonField;
-                    this.popupFields = popupFields;
 
                     this.geoJSON = this._createGeoJSON(this.data);
                     this._addLayerToMap();
-                    this._buildFilters(filterFields);
-                    this._renderFilterControls(targetContainerId);
+                    this._buildFilters(this.filterFields);
+                    this._renderFilterControls(this.targetContainerId);
                     this._addClickHandler();
 
                     return {
@@ -1369,6 +1364,13 @@
                     console.error('Error loading spreadsheet:', error);
                     throw error;
                 }
+            }
+
+            async reload(spreadsheetUrl) {
+                // Remove existing layer
+                this.remove();
+                // Load new data with same config
+                return await this.load(spreadsheetUrl);
             }
 
             _createGeoJSON(data) {
@@ -1482,11 +1484,11 @@
                 filterWrapper.style.marginTop = '10px';
                 filterWrapper.style.border = '1px solid #d0e8ff';
 
-                const title = document.createElement('div');
-                title.className = 'legend-title';
-                title.textContent = 'CSV Layer Filters';
-                title.style.marginBottom = '10px';
-                filterWrapper.appendChild(title);
+                const titleElement = document.createElement('div');
+                titleElement.className = 'legend-title';
+                titleElement.textContent = this.title;
+                titleElement.style.marginBottom = '10px';
+                filterWrapper.appendChild(titleElement);
 
                 const visibilityToggle = document.createElement('div');
                 visibilityToggle.className = 'layer-toggle-item';
@@ -1622,13 +1624,9 @@
                     return Object.keys(this.filterStates).every(field => {
                         const value = feature.properties[field];
 
-                        // If the field doesn't exist in filterStates, include the feature
                         if (!this.filterStates[field]) return true;
-
-                        // If the value doesn't exist in this field's filters, include it
                         if (this.filterStates[field][value] === undefined) return true;
 
-                        // Otherwise check if the filter is enabled
                         return this.filterStates[field][value] === true;
                     });
                 });
