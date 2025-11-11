@@ -689,7 +689,7 @@
             const sensorsLayer = new SpreadsheetLayerManager(map, {
                 layerIdPrefix: 'sensor-csv',
                 circleRadius: 8,
-                circleColor: '#0f0',
+                circleColor: '#80bc2c',
                 circleStrokeColor: '#fff',
                 circleStrokeWidth: 2,
                 title: 'Sensor locations',
@@ -1403,18 +1403,19 @@
                     paint: {
                         'circle-radius': [
                             'case',
-                            ['has', 'PinSize'],
+                            ['all', ['has', 'PinSize'], ['!=', ['get', 'PinSize'], ''], ['!=', ['get', 'PinSize'], null]],
                             ['to-number', ['get', 'PinSize'], this.circleRadius],
                             this.circleRadius
                         ],
                         'circle-color': [
                             'case',
-                            ['has', 'Hex Color'],
+                            ['all', ['has', 'Hex Color'], ['!=', ['get', 'Hex Color'], ''], ['!=', ['get', 'Hex Color'], null]],
                             ['get', 'Hex Color'],
                             this.circleColor
                         ],
                         'circle-stroke-width': this.circleStrokeWidth,
-                        'circle-stroke-color': this.circleStrokeColor
+                        'circle-stroke-color': this.circleStrokeColor,
+                        'circle-opacity': 0.8
                     }
                 });
             }
