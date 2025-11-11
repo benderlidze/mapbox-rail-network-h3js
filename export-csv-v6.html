@@ -1401,8 +1401,18 @@
                     type: 'circle',
                     source: this.sourceId,
                     paint: {
-                        'circle-radius': this.circleRadius,
-                        'circle-color': this.circleColor,
+                        'circle-radius': [
+                            'case',
+                            ['has', 'PinSize'],
+                            ['to-number', ['get', 'PinSize'], this.circleRadius],
+                            this.circleRadius
+                        ],
+                        'circle-color': [
+                            'case',
+                            ['has', 'Hex Color'],
+                            ['get', 'Hex Color'],
+                            this.circleColor
+                        ],
                         'circle-stroke-width': this.circleStrokeWidth,
                         'circle-stroke-color': this.circleStrokeColor
                     }
