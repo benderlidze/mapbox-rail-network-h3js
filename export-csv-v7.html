@@ -654,7 +654,6 @@
 
         map.on('load', async () => {
 
-
             const sensorsLayer = new SpreadsheetLayerManager(map, {
                 layerIdPrefix: 'sensor-csv',
                 circleRadius: 8,
@@ -664,6 +663,7 @@
                 title: 'Sensor locations',
                 latField: 'lat',
                 lonField: 'lon',
+
                 filterFields: [
                     'Sensor Category',
                     'Facility Category',
@@ -991,13 +991,22 @@
 
             document.getElementById('toggle-sensors').addEventListener('change', function (e) {
                 const visibility = e.target.checked ? 'visible' : 'none';
-                map.setLayoutProperty('sensors-layer', 'visibility', visibility);
-                map.setLayoutProperty('sensors-label', 'visibility', visibility);
+                // map.setLayoutProperty('sensors-layer', 'visibility', visibility);
+                // map.setLayoutProperty('sensors-label', 'visibility', visibility);
+
+                sensorsLayer.layerId + "-source"
             });
 
             document.getElementById('toggle-facilities').addEventListener('change', function (e) {
                 const visibility = e.target.checked ? 'visible' : 'none';
-                map.setLayoutProperty('facilities', 'visibility', visibility);
+                // map.setLayoutProperty('facilities', 'visibility', visibility);
+
+                console.log('sensorsLayer', sensorsLayer);
+
+
+                if (e.target.checked) {
+                    map.setFilter(sensorsLayer.layerId, ['!=', ['get', 'Facility Category'], '']);
+                }
             });
 
             document.getElementById('toggle-csv-layer').addEventListener('change', function (e) {
@@ -1128,6 +1137,7 @@
                 this.geoJSON = null;
                 this.filters = {};
                 this.filterStates = {};
+                this.hideNonEmptyStates = {}; // NEW: Track hide states for multiple fields
                 this.filterContainerElement = null;
                 this.popup = new mapboxgl.Popup({
                     closeButton: true,
@@ -1167,9 +1177,7 @@
             }
 
             async reload(spreadsheetUrl) {
-                // Remove existing layer
                 this.remove();
-                // Load new data with same config
                 return await this.load(spreadsheetUrl);
             }
 
@@ -1233,11 +1241,11 @@
                             const value = properties[field];
                             if (value !== undefined && value !== null && value !== '') {
                                 popupHTML += `
-                            <div style="margin-bottom: 8px;">
-                                <strong style="color: #333;">${field}:</strong>
-                                <span style="color: #666;"> ${value}</span>
-                            </div>
-                        `;
+                    <div style="margin-bottom: 8px;">
+                        <strong style="color: #333;">${field}:</strong>
+                        <span style="color: #666;"> ${value}</span>
+                    </div>
+                `;
                             }
                         });
 
@@ -1327,18 +1335,71 @@
                 visibilityToggle.appendChild(visibilityLabel);
                 filterWrapper.appendChild(visibilityToggle);
 
+                // Fields that should have a "Hide all" checkbox
+                const fieldsWithHideOption = ['Sensor Category', 'Facility Category'];
+
                 Object.keys(this.filters).forEach(field => {
                     const fieldSection = document.createElement('div');
                     fieldSection.className = 'filter-section';
                     fieldSection.style.marginBottom = '12px';
 
-                    const fieldTitle = document.createElement('div');
-                    fieldTitle.className = 'legend-title';
-                    fieldTitle.textContent = field;
-                    fieldTitle.style.fontSize = '12px';
-                    fieldTitle.style.fontWeight = '600';
-                    fieldTitle.style.marginBottom = '6px';
-                    fieldSection.appendChild(fieldTitle);
+                    if (fieldsWithHideOption.includes(field)) {
+                        // Create container for title + checkbox on same line
+                        const titleRow = document.createElement('div');
+                        titleRow.style.display = 'flex';
+                        titleRow.style.alignItems = 'center';
+                        titleRow.style.justifyContent = 'space-between';
+                        titleRow.style.marginBottom = '6px';
+
+                        const fieldTitle = document.createElement('div');
+                        fieldTitle.className = 'legend-title';
+                        fieldTitle.textContent = field;
+                        fieldTitle.style.fontSize = '12px';
+                        fieldTitle.style.fontWeight = '600';
+                        fieldTitle.style.marginBottom = '0';
+
+                        // Create checkbox container
+                        const hideCheckboxContainer = document.createElement('div');
+                        hideCheckboxContainer.style.display = 'flex';
+                        hideCheckboxContainer.style.alignItems = 'center';
+                        hideCheckboxContainer.style.gap = '4px';
+
+                        const hideCheckbox = document.createElement('input');
+                        hideCheckbox.type = 'checkbox';
+                        hideCheckbox.id = `hide-nonempty-${this.layerId}-${field}`;
+                        hideCheckbox.checked = false;
+
+                        // Initialize hide state for this field
+                        this.hideNonEmptyStates[field] = false;
+
+                        hideCheckbox.addEventListener('change', (e) => {
+                            this.hideNonEmptyStates[field] = e.target.checked;
+                            this._applyFilters();
+                        });
+
+                        const hideLabel = document.createElement('label');
+                        hideLabel.htmlFor = hideCheckbox.id;
+                        hideLabel.textContent = 'Hide all';
+                        hideLabel.style.fontSize = '10px';
+                        hideLabel.style.cursor = 'pointer';
+                        hideLabel.style.color = '#666';
+
+                        hideCheckboxContainer.appendChild(hideCheckbox);
+                        hideCheckboxContainer.appendChild(hideLabel);
+
+                        titleRow.appendChild(fieldTitle);
+                        titleRow.appendChild(hideCheckboxContainer);
+                        fieldSection.appendChild(titleRow);
+                    } else {
+                        // Regular title for other fields
+                        const fieldTitle = document.createElement('div');
+                        fieldTitle.className = 'legend-title';
+                        fieldTitle.textContent = field;
+                        fieldTitle.style.fontSize = '12px';
+                        fieldTitle.style.fontWeight = '600';
+                        fieldTitle.style.marginBottom = '6px';
+                        fieldSection.appendChild(fieldTitle);
+                    }
 
                     this.filters[field].forEach(value => {
                         const filterItem = document.createElement('div');
@@ -1349,7 +1410,7 @@
 
                         const checkbox = document.createElement('input');
                         checkbox.type = 'checkbox';
-                        checkbox.className = 'facility-checkbox';
+                        checkbox.className = `${this._getCheckboxClass(field)}`;
                         checkbox.checked = this.filterStates[field][value];
                         checkbox.id = `filter-${this.layerId}-${field}-${value}`;
 
@@ -1376,6 +1437,13 @@
                 this._addFilterButtons(filterWrapper);
                 targetContainer.appendChild(filterWrapper);
                 this.filterContainerElement = filterWrapper;
+            }
+
+            _getCheckboxClass(field) {
+                // Return specific CSS classes for known fields for styling/filtering convenience
+                if (field === 'Sensor Category') return 'sensor-checkbox';
+                if (field === 'Facility Category') return 'facility-checkbox';
+                return 'generic-checkbox';
             }
 
             _addFilterButtons(container) {
@@ -1406,7 +1474,7 @@
             _toggleAllFilters(state) {
                 if (!this.filterContainerElement) return;
 
-                const checkboxes = this.filterContainerElement.querySelectorAll('.facility-checkbox');
+                const checkboxes = this.filterContainerElement.querySelectorAll('input[type="checkbox"]:not(.layer-toggle-checkbox)');
                 checkboxes.forEach(checkbox => {
                     checkbox.checked = state;
                 });
@@ -1432,6 +1500,17 @@
 
             _applyFilters() {
                 const filteredFeatures = this.geoJSON.features.filter(feature => {
+                    // NEW: Check all fields with hide options
+                    for (const field in this.hideNonEmptyStates) {
+                        if (this.hideNonEmptyStates[field]) {
+                            const fieldValue = feature.properties[field];
+                            if (fieldValue && fieldValue !== '') {
+                                return false; // Hide this feature
+                            }
+                        }
+                    }
+
+                    // Existing filter logic
                     return Object.keys(this.filterStates).every(field => {
                         const value = feature.properties[field];
 
@@ -1474,6 +1553,7 @@
                 }
             }
         }
+
 
     </script>
 </body>
