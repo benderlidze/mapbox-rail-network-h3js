@@ -340,6 +340,8 @@
         }
 
         let markerGroupCounter = 0;
+        let sensorsLayer = null;
+        let facilitiesLayer = null;
 
         const lightStyle = 'mapbox://styles/mapbox/light-v11';
         const satelliteStyle = 'mapbox://styles/mapbox/satellite-streets-v12';
@@ -654,7 +656,8 @@
 
         map.on('load', async () => {
 
-            const sensorsLayer = new SpreadsheetLayerManager(map, {
+            // Load Sensors Layer
+            sensorsLayer = new SpreadsheetLayerManager(map, {
                 layerIdPrefix: 'sensor-csv',
                 circleRadius: 8,
                 circleColor: '#80bc2c',
@@ -663,7 +666,6 @@
                 title: 'Sensor locations',
                 latField: 'lat',
                 lonField: 'lon',
-
                 filterFields: [
                     'Sensor Category',
                     'Facility Category',
@@ -691,10 +693,44 @@
             });
 
             try {
-                await sensorsLayer.load('https://docs.google.com/spreadsheets/d/e/2PACX-1vQQ3wGuZSJoX2fDPPWj9u-Ty_JvuyOu-UYIWKM7i7gjU-5E5_wxLepUzYYRAjuGnsgGdztRZjBwXO5P/pub?output=csv');
+                await sensorsLayer.load('https://docs.google.com/spreadsheets/d/e/2PACX-1vTsoqzgjIBY3FS0YmOdMynTHFx5SZFTdm7O9wP-vDDoDwRieWfP155Vb_60iwkq48_JLAWCmTLBlaRx/pub?gid=0&single=true&output=csv');
                 console.log('Sensor layer loaded');
             } catch (error) {
                 console.error('Failed to load sensor layer:', error);
+            }
+
+            facilitiesLayer = new SpreadsheetLayerManager(map, {
+                layerIdPrefix: 'facilities-csv',
+                circleRadius: 8,
+                circleColor: '#e74c3c',
+                circleStrokeColor: '#fff',
+                circleStrokeWidth: 2,
+                title: 'Facility locations',
+                latField: 'lat',
+                lonField: 'lon',
+                filterFields: [
+                    'Facility Category',
+                ],
+                popupFields: [
+                    'Sensor Name',
+                    'Facility Category',
+                    'Railroad',
+                    'Install Date',
+                    'State/Province',
+                    'Hex Color',
+                    'Purpose',
+                    'Between',
+                    'Subdivision',
+                    'Track_Rights',
+                    'Notes'
+                ],
+                targetContainerId: 'legend'
+            });
+            try {
+                await facilitiesLayer.load('https://docs.google.com/spreadsheets/d/e/2PACX-1vTsoqzgjIBY3FS0YmOdMynTHFx5SZFTdm7O9wP-vDDoDwRieWfP155Vb_60iwkq48_JLAWCmTLBlaRx/pub?gid=827244080&single=true&output=csv');
+                console.log('Facilities layer loaded');
+            } catch (error) {
+                console.error('Failed to load facilities layer:', error);
             }
 
             const popup = new mapboxgl.Popup({
@@ -991,21 +1027,15 @@
 
             document.getElementById('toggle-sensors').addEventListener('change', function (e) {
                 const visibility = e.target.checked ? 'visible' : 'none';
-                // map.setLayoutProperty('sensors-layer', 'visibility', visibility);
-                // map.setLayoutProperty('sensors-label', 'visibility', visibility);
-
-                sensorsLayer.layerId + "-source"
+                if (sensorsLayer && sensorsLayer.layerId) {
+                    map.setLayoutProperty(sensorsLayer.layerId, 'visibility', visibility);
+                }
             });
 
             document.getElementById('toggle-facilities').addEventListener('change', function (e) {
                 const visibility = e.target.checked ? 'visible' : 'none';
-                // map.setLayoutProperty('facilities', 'visibility', visibility);
-
-                console.log('sensorsLayer', sensorsLayer);
-
-
-                if (e.target.checked) {
-                    map.setFilter(sensorsLayer.layerId, ['!=', ['get', 'Facility Category'], '']);
+                if (facilitiesLayer && facilitiesLayer.layerId) {
+                    map.setLayoutProperty(facilitiesLayer.layerId, 'visibility', visibility);
                 }
             });
 
@@ -1327,7 +1357,7 @@
                 const visibilityLabel = document.createElement('label');
                 visibilityLabel.className = 'layer-toggle-label';
                 visibilityLabel.htmlFor = visibilityCheckbox.id;
-                visibilityLabel.textContent = 'Show CSV Points';
+                visibilityLabel.textContent = 'Show Layer';
                 visibilityLabel.style.fontSize = '12px';
                 visibilityLabel.style.cursor = 'pointer';
 
@@ -1336,7 +1366,8 @@
                 filterWrapper.appendChild(visibilityToggle);
 
                 // Fields that should have a "Hide all" checkbox
-                const fieldsWithHideOption = ['Sensor Category', 'Facility Category'];
+                //const fieldsWithHideOption = ['Sensor Category', 'Facility Category'];
+                const fieldsWithHideOption = [];
 
                 Object.keys(this.filters).forEach(field => {
                     const fieldSection = document.createElement('div');
