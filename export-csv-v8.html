@@ -281,6 +281,7 @@
         <div class="tap-instruction">Tap to interact with map</div>
     </div>
     <div id="legend">
+
         <button id="ab-marker-btn">Add A/B Marker Group</button>
         <button id="export-markers-btn">Export Markers</button>
         <div class="marker-groups-container" id="marker-groups-container"></div>
@@ -655,7 +656,6 @@
         generateRailroadFilters();
 
         map.on('load', async () => {
-
             // Load Sensors Layer
             sensorsLayer = new SpreadsheetLayerManager(map, {
                 layerIdPrefix: 'sensor-csv',
@@ -892,8 +892,20 @@
                 maxzoom: 22
             }, 'rail-data');
 
+            // Create and append satellite checkbox
+            const satelliteToggle = createCheckboxToggle(
+                'toggle-satellite',
+                'Satellite',
+                false,
+                function (e) {
+                    const visibility = e.target.checked ? 'visible' : 'none';
+                    map.setLayoutProperty('satellite-layer', 'visibility', visibility);
+                }
+            );
+            document.getElementById('legend').prepend(satelliteToggle);
+
             map.on('zoom', () => {
-                map.getZoom() < 12 ? map.setLayoutProperty('satellite-layer', 'visibility', 'none') : map.setLayoutProperty('satellite-layer', 'visibility', 'visible');
+                //map.getZoom() < 12 ? map.setLayoutProperty('satellite-layer', 'visibility', 'none') : map.setLayoutProperty('satellite-layer', 'visibility', 'visible');
             });
 
             function generateRailPopup(properties) {
@@ -1583,6 +1595,38 @@
                     this.map.removeSource(this.sourceId);
                 }
             }
+        }
+
+
+
+        function createCheckboxToggle(id, labelText, checked = true, onChange, containerClass = 'layer-toggle-item') {
+            // Create container
+            const container = document.createElement('div');
+            container.className = containerClass;
+
+            // Create checkbox
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.className = 'layer-toggle-checkbox';
+            checkbox.id = id;
+            checkbox.checked = checked;
+
+            // Create label
+            const label = document.createElement('label');
+            label.className = 'layer-toggle-label';
+            label.htmlFor = id;
+            label.textContent = labelText;
+
+            // Append elements
+            container.appendChild(checkbox);
+            container.appendChild(label);
+
+            // Add event listener
+            if (onChange) {
+                checkbox.addEventListener('change', onChange);
+            }
+
+            return container;
         }
 
 
