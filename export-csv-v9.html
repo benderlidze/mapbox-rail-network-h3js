@@ -656,6 +656,11 @@
         generateRailroadFilters();
 
         map.on('load', async () => {
+
+            // Initialize the SensorManager
+            sensorManager = new SensorManager(map);
+            console.log('SensorManager initialized');
+
             // Load Sensors Layer
             sensorsLayer = new SpreadsheetLayerManager(map, {
                 layerIdPrefix: 'sensor-csv',
@@ -1629,7 +1634,482 @@
             return container;
         }
 
+        class SensorManager {
+            constructor(map) {
+                this.map = map;
+                this.sensors = [];
+                this.currentMarkerId = 0;
+                this.markers = new Map();
+                this.isAddingMode = false;
 
+                this.init();
+            }
+
+            init() {
+                this.createPanel();
+
+                this.map.on('click', (e) => {
+                    if (this.isAddingMode) {
+                        this.showAddSensorPopup(e.lngLat);
+                        this.isAddingMode = false;
+                        this.map.getCanvas().style.cursor = '';
+                    }
+                });
+            }
+
+            createPanel() {
+                const panel = document.createElement('div');
+                panel.id = 'sensor-panel';
+                panel.style.cssText = `
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    width: 200px;
+    max-height: 80vh;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    z-index: 1000;
+  `;
+
+                const header = document.createElement('div');
+                header.style.cssText = `
+    padding: 10px;
+    border-bottom: 1px solid #e0e0e0;
+    background: #f5f5f5;
+  `;
+
+                const addButton = document.createElement('button');
+                addButton.innerHTML = '+ Sensor';
+                addButton.style.cssText = `
+    width: 100%;
+    padding: 8px;
+    background: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: bold;
+  `;
+                addButton.onmouseover = () => addButton.style.background = '#45a049';
+                addButton.onmouseout = () => addButton.style.background = '#4CAF50';
+                addButton.onclick = () => this.enableAddingMode();
+                header.appendChild(addButton);
+
+                const listContainer = document.createElement('div');
+                listContainer.id = 'sensor-list';
+                listContainer.style.cssText = `
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px;
+  `;
+
+                const footer = document.createElement('div');
+                footer.style.cssText = `
+                    padding: 10px;
+                    border-top: 1px solid #e0e0e0;
+                    background: #f5f5f5;
+                `;
+
+                const exportButton = document.createElement('button');
+                exportButton.innerHTML = '↓ CSV';
+                exportButton.style.cssText = `
+                    width: 100%;
+                    padding: 8px;
+                    background: #2196F3;
+                    color: white;
+                    border: none;
+                    border-radius: 4px;
+                    cursor: pointer;
+                    font-size: 13px;
+                    font-weight: bold;
+                `;
+                exportButton.onmouseover = () => exportButton.style.background = '#0b7dda';
+                exportButton.onmouseout = () => exportButton.style.background = '#2196F3';
+                exportButton.onclick = () => this.exportToCSV();
+                footer.appendChild(exportButton);
+
+                panel.appendChild(header);
+                panel.appendChild(listContainer);
+                panel.appendChild(footer);
+                document.body.appendChild(panel);
+            }
+
+
+            enableAddingMode() {
+                this.isAddingMode = true;
+                this.map.getCanvas().style.cursor = 'crosshair';
+            }
+
+            showAddSensorPopup(lngLat) {
+                const popup = this.createSensorPopup({
+                    sensorName: '',
+                    sensorCategory: '',
+                    between: '',
+                    installDate: '',
+                    notes: ''
+                }, lngLat, 'add');
+
+                popup.addTo(this.map);
+            }
+
+            showEditSensorPopup(sensor) {
+                const popup = this.createSensorPopup(sensor,
+                    { lng: sensor.lng, lat: sensor.lat },
+                    'edit'
+                );
+
+                popup.addTo(this.map);
+            }
+
+            createSensorPopup(data, lngLat, mode) {
+                const popupContent = document.createElement('div');
+                popupContent.style.cssText = 'padding: 10px; min-width: 250px;';
+
+                const title = document.createElement('h3');
+                title.textContent = mode === 'add' ? 'Add Sensor' : 'Edit Sensor';
+                title.style.cssText = 'margin: 0 0 15px 0; font-size: 16px;';
+                popupContent.appendChild(title);
+
+                const fields = [
+                    { label: 'Sensor Name', key: 'sensorName', type: 'text' },
+                    { label: 'Sensor Category', key: 'sensorCategory', type: 'text' },
+                    { label: 'Between', key: 'between', type: 'text' },
+                    { label: 'Install Date', key: 'installDate', type: 'date' },
+                    { label: 'Notes', key: 'notes', type: 'textarea' }
+                ];
+
+                const inputs = {};
+
+                fields.forEach(field => {
+                    const fieldGroup = document.createElement('div');
+                    fieldGroup.style.cssText = 'margin-bottom: 12px;';
+
+                    const label = document.createElement('label');
+                    label.textContent = field.label;
+                    label.style.cssText = 'display: block; margin-bottom: 4px; font-size: 12px; font-weight: bold;';
+                    fieldGroup.appendChild(label);
+
+                    let input;
+                    if (field.type === 'textarea') {
+                        input = document.createElement('textarea');
+                        input.rows = 3;
+                    } else {
+                        input = document.createElement('input');
+                        input.type = field.type;
+                    }
+
+                    input.value = data[field.key] || '';
+                    input.style.cssText = `
+        width: 100%;
+        padding: 6px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 13px;
+        box-sizing: border-box;
+      `;
+                    inputs[field.key] = input;
+                    fieldGroup.appendChild(input);
+                    popupContent.appendChild(fieldGroup);
+                });
+
+                const buttonContainer = document.createElement('div');
+                buttonContainer.style.cssText = 'display: flex; gap: 8px; margin-top: 15px;';
+
+                const saveButton = document.createElement('button');
+                saveButton.textContent = mode === 'add' ? 'Add' : 'Save';
+                saveButton.style.cssText = `
+      flex: 1;
+      padding: 8px;
+      background: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: bold;
+    `;
+
+                const cancelButton = document.createElement('button');
+                cancelButton.textContent = 'Cancel';
+                cancelButton.style.cssText = `
+      flex: 1;
+      padding: 8px;
+      background: #f44336;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: bold;
+    `;
+
+                buttonContainer.appendChild(saveButton);
+                buttonContainer.appendChild(cancelButton);
+                popupContent.appendChild(buttonContainer);
+
+                const popup = new mapboxgl.Popup({ closeOnClick: false })
+                    .setLngLat(lngLat)
+                    .setDOMContent(popupContent);
+
+                saveButton.onclick = () => {
+                    const sensorData = {
+                        sensorName: inputs.sensorName.value,
+                        sensorCategory: inputs.sensorCategory.value,
+                        between: inputs.between.value,
+                        installDate: inputs.installDate.value,
+                        notes: inputs.notes.value,
+                        lng: lngLat.lng,
+                        lat: lngLat.lat
+                    };
+
+                    if (mode === 'add') {
+                        this.addSensor(sensorData);
+                    } else {
+                        this.updateSensor(data.id, sensorData);
+                    }
+                    popup.remove();
+                };
+
+                cancelButton.onclick = () => {
+                    popup.remove();
+                };
+
+                return popup;
+            }
+
+            createMarker(sensor) {
+                const el = document.createElement('div');
+                el.className = 'sensor-marker';
+                el.style.cssText = `
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background-color: #00ff00;
+      border: 2px solid #ffffff;
+      cursor: grab;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+    `;
+
+                const marker = new mapboxgl.Marker({
+                    element: el,
+                    draggable: true
+                })
+                    .setLngLat([sensor.lng, sensor.lat])
+                    .addTo(this.map);
+
+                marker.on('drag', () => {
+                    el.style.cursor = 'grabbing';
+                });
+
+                marker.on('dragend', () => {
+                    el.style.cursor = 'grab';
+                    const lngLat = marker.getLngLat();
+
+                    sensor.lng = lngLat.lng;
+                    sensor.lat = lngLat.lat;
+
+                    this.updateList();
+
+                    console.log(`Sensor "${sensor.sensorName}" moved to: ${lngLat.lng.toFixed(6)}, ${lngLat.lat.toFixed(6)}`);
+                });
+
+                el.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    this.showEditSensorPopup(sensor);
+                });
+
+                return marker;
+            }
+
+            addSensor(sensorData) {
+                const sensor = {
+                    id: ++this.currentMarkerId,
+                    ...sensorData
+                };
+
+                this.sensors.push(sensor);
+
+                const marker = this.createMarker(sensor);
+                this.markers.set(sensor.id, marker);
+
+                this.updateList();
+            }
+
+            updateSensor(id, sensorData) {
+                const index = this.sensors.findIndex(s => s.id === id);
+                if (index !== -1) {
+                    this.sensors[index] = {
+                        id,
+                        ...sensorData
+                    };
+
+                    const marker = this.markers.get(id);
+                    if (marker) {
+                        marker.setLngLat([sensorData.lng, sensorData.lat]);
+                    }
+
+                    this.updateList();
+                }
+            }
+
+            deleteSensor(id) {
+                const marker = this.markers.get(id);
+                if (marker) {
+                    marker.remove();
+                    this.markers.delete(id);
+                }
+
+                this.sensors = this.sensors.filter(s => s.id !== id);
+                this.updateList();
+            }
+
+            updateList() {
+                const listContainer = document.getElementById('sensor-list');
+                listContainer.innerHTML = '';
+
+                if (this.sensors.length === 0) {
+                    const emptyMessage = document.createElement('div');
+                    emptyMessage.textContent = 'No sensors yet';
+                    emptyMessage.style.cssText = 'color: #999; text-align: center; padding: 15px; font-size: 12px;';
+                    listContainer.appendChild(emptyMessage);
+                    return;
+                }
+
+                this.sensors.forEach(sensor => {
+                    const item = document.createElement('div');
+                    item.style.cssText = `
+        padding: 8px;
+        margin-bottom: 6px;
+        background: #f9f9f9;
+        border-radius: 4px;
+        border: 1px solid #e0e0e0;
+      `;
+
+                    // Header with name and buttons
+                    const headerRow = document.createElement('div');
+                    headerRow.style.cssText = 'display: flex; align-items: center; gap: 4px; margin-bottom: 4px;';
+
+                    const name = document.createElement('div');
+                    name.textContent = sensor.sensorName || 'Unnamed';
+                    name.style.cssText = 'flex: 1; font-weight: bold; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;';
+                    headerRow.appendChild(name);
+
+                    // Edit button (pencil icon)
+                    const editButton = document.createElement('button');
+                    editButton.innerHTML = '✎';
+                    editButton.title = 'Edit';
+                    editButton.style.cssText = `
+        width: 24px;
+        height: 24px;
+        padding: 0;
+        background: #2196F3;
+        color: white;
+        border: none;
+        border-radius: 3px;
+        cursor: pointer;
+        font-size: 14px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      `;
+                    editButton.onmouseover = () => editButton.style.background = '#0b7dda';
+                    editButton.onmouseout = () => editButton.style.background = '#2196F3';
+                    editButton.onclick = () => this.showEditSensorPopup(sensor);
+                    headerRow.appendChild(editButton);
+
+                    // Delete button (X icon)
+                    const deleteButton = document.createElement('button');
+                    deleteButton.innerHTML = '✕';
+                    deleteButton.title = 'Delete';
+                    deleteButton.style.cssText = `
+        width: 24px;
+        height: 24px;
+        padding: 0;
+        background: #f44336;
+        color: white;
+        border: none;
+        border-radius: 3px;
+        cursor: pointer;
+        font-size: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      `;
+                    deleteButton.onmouseover = () => deleteButton.style.background = '#d32f2f';
+                    deleteButton.onmouseout = () => deleteButton.style.background = '#f44336';
+                    deleteButton.onclick = () => {
+                        if (confirm(`Delete "${sensor.sensorName}"?`)) {
+                            this.deleteSensor(sensor.id);
+                        }
+                    };
+                    headerRow.appendChild(deleteButton);
+
+                    item.appendChild(headerRow);
+
+                    // Category
+                    if (sensor.sensorCategory) {
+                        const category = document.createElement('div');
+                        category.textContent = sensor.sensorCategory;
+                        category.style.cssText = 'font-size: 11px; color: #666; margin-bottom: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;';
+                        item.appendChild(category);
+                    }
+
+                    // Install Date
+                    if (sensor.installDate) {
+                        const installDate = document.createElement('div');
+                        installDate.textContent = sensor.installDate;
+                        installDate.style.cssText = 'font-size: 10px; color: #999; margin-bottom: 2px;';
+                        item.appendChild(installDate);
+                    }
+
+                    // Coordinates (compact)
+                    const coordinates = document.createElement('div');
+                    coordinates.textContent = `${sensor.lng.toFixed(4)}, ${sensor.lat.toFixed(4)}`;
+                    coordinates.style.cssText = 'font-size: 9px; color: #aaa; font-family: monospace;';
+                    item.appendChild(coordinates);
+
+                    listContainer.appendChild(item);
+                });
+            }
+
+            exportToCSV() {
+                if (this.sensors.length === 0) {
+                    alert('No sensors to export');
+                    return;
+                }
+
+                const headers = ['Sensor Name', 'Sensor Category', 'Between', 'Install Date', 'Notes', 'Longitude', 'Latitude'];
+                const rows = this.sensors.map(sensor => [
+                    sensor.sensorName || '',
+                    sensor.sensorCategory || '',
+                    sensor.between || '',
+                    sensor.installDate || '',
+                    sensor.notes || '',
+                    sensor.lng,
+                    sensor.lat
+                ]);
+
+                const csvContent = [
+                    headers.join(','),
+                    ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+                ].join('\n');
+
+                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                const link = document.createElement('a');
+                const url = URL.createObjectURL(blob);
+
+                link.setAttribute('href', url);
+                link.setAttribute('download', `sensors_${new Date().toISOString().slice(0, 10)}.csv`);
+                link.style.visibility = 'hidden';
+
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }
+        }
 
 
     </script>
