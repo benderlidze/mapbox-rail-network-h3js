@@ -1768,7 +1768,7 @@
 
             createSensorPopup(data, lngLat, mode) {
                 const popupContent = document.createElement('div');
-                popupContent.style.cssText = 'padding: 10px; min-width: 250px;';
+                popupContent.style.cssText = 'padding: 10px; min-width: 280px;';
 
                 const title = document.createElement('h3');
                 title.textContent = mode === 'add' ? 'Add Sensor' : 'Edit Sensor';
@@ -1805,13 +1805,13 @@
 
                     input.value = data[field.key] || '';
                     input.style.cssText = `
-        width: 100%;
-        padding: 6px;
-        border: 1px solid #ddd;
-        border-radius: 4px;
-        font-size: 13px;
-        box-sizing: border-box;
-      `;
+      width: 100%;
+      padding: 6px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 13px;
+      box-sizing: border-box;
+    `;
                     inputs[field.key] = input;
                     fieldGroup.appendChild(input);
                     popupContent.appendChild(fieldGroup);
@@ -1823,34 +1823,38 @@
                 const saveButton = document.createElement('button');
                 saveButton.textContent = mode === 'add' ? 'Add' : 'Save';
                 saveButton.style.cssText = `
-      flex: 1;
-      padding: 8px;
-      background: #4CAF50;
-      color: white;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-      font-weight: bold;
-    `;
+    flex: 1;
+    padding: 8px;
+    background: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: bold;
+  `;
 
                 const cancelButton = document.createElement('button');
                 cancelButton.textContent = 'Cancel';
                 cancelButton.style.cssText = `
-      flex: 1;
-      padding: 8px;
-      background: #f44336;
-      color: white;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-      font-weight: bold;
-    `;
+    flex: 1;
+    padding: 8px;
+    background: #f44336;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: bold;
+  `;
 
                 buttonContainer.appendChild(saveButton);
                 buttonContainer.appendChild(cancelButton);
                 popupContent.appendChild(buttonContainer);
 
-                const popup = new mapboxgl.Popup({ closeOnClick: false })
+                // Set maxWidth to make the popup wider
+                const popup = new mapboxgl.Popup({
+                    closeOnClick: false,
+                    maxWidth: '350px'
+                })
                     .setLngLat(lngLat)
                     .setDOMContent(popupContent);
 
@@ -1879,6 +1883,7 @@
 
                 return popup;
             }
+
 
             createMarker(sensor) {
                 const el = document.createElement('div');
