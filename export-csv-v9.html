@@ -1889,14 +1889,16 @@
                 const el = document.createElement('div');
                 el.className = 'sensor-marker';
                 el.style.cssText = `
-      width: 20px;
-      height: 20px;
-      border-radius: 50%;
-      background-color: #00ff00;
-      border: 2px solid #ffffff;
-      cursor: grab;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.3);
-    `;
+                    width: 20px;
+                    height: 20px;
+                    border-radius: 50%;
+                    background-color: #00ff00;
+                    border: 2px solid #ffffff;
+                    cursor: grab;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+                `;
+
+                let currentPopup = null;
 
                 const marker = new mapboxgl.Marker({
                     element: el,
@@ -1905,8 +1907,14 @@
                     .setLngLat([sensor.lng, sensor.lat])
                     .addTo(this.map);
 
-                marker.on('drag', () => {
+                marker.on('dragstart', () => {
                     el.style.cursor = 'grabbing';
+
+                    // Close popup on drag start
+                    if (currentPopup) {
+                        currentPopup.remove();
+                        currentPopup = null;
+                    }
                 });
 
                 marker.on('dragend', () => {
@@ -1916,18 +1924,28 @@
                     sensor.lng = lngLat.lng;
                     sensor.lat = lngLat.lat;
 
+                    // Update list but do NOT open popup on drag end
                     this.updateList();
-
-                    console.log(`Sensor "${sensor.sensorName}" moved to: ${lngLat.lng.toFixed(6)}, ${lngLat.lat.toFixed(6)}`);
                 });
 
                 el.addEventListener('click', (e) => {
                     e.stopPropagation();
-                    this.showEditSensorPopup(sensor);
+
+                    // Close existing popup before opening another
+                    if (currentPopup) {
+                        currentPopup.remove();
+                        currentPopup = null;
+                    }
+
+                    // Open popup at current marker position with updated sensor data
+                    currentPopup = this.createSensorPopup(sensor, marker.getLngLat(), 'edit');
+                    currentPopup.addTo(this.map);
                 });
 
                 return marker;
             }
+
+
 
             addSensor(sensorData) {
                 const sensor = {
